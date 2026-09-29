@@ -8,16 +8,12 @@ var notify = require('../lib/notify').notify;
 
 var TYPES = ['événement', 'entreprise', 'groupe', 'autre'];
 
-function todayParis() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: P.TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
-
 module.exports = http.postHandler(async function (body, req) {
   if (antispam.isSpam(body)) return { body: { ok: true } };
 
   var v = new V.Validator(body);
   v.field('nb_vehicules', { max: 2, check: function (x) { return /^\d+$/.test(x) && +x >= 2 && +x <= 50 ? null : 'Entre 2 et 50 véhicules.'; }, map: Number })
-    .field('date', { max: 10, check: function (x) { return V.checkDate(x) || (x < todayParis() ? 'Cette date est déjà passée.' : null); } })
+    .field('date', { max: 10, check: function (x) { return V.checkDate(x) || (x < P.todayParis() ? 'Cette date est déjà passée.' : null); } })
     .field('heure_debut', { max: 5, check: V.checkTime })
     .field('heure_fin', { max: 5, check: V.checkTime })
     .field('lieu', { max: 200 })
@@ -25,6 +21,9 @@ module.exports = http.postHandler(async function (body, req) {
     .field('type', { oneOf: TYPES })
     .field('details', { multiline: true, required: false, max: 2000 });
   V.contact(v).field('societe', { required: false, max: 120 });
+  if (!v.errors.date && !v.errors.heure_debut && v.data.date === P.todayParis() && v.data.heure_debut <= P.nowParisHm()) {
+    v.errors.heure_debut = 'Cette heure est déjà passée.';
+  }
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
   var d = v.data;
   var name = d.prenom + ' ' + d.nom;
@@ -43,6 +42,7 @@ module.exports = http.postHandler(async function (body, req) {
     ['E-mail', d.email]
   ];
 
+  http.checkLimit(req, 'mise-a-disposition', http.FORM_LIMIT);
   await notify(req, {
     subject: subject,
     replyTo: d.email,
@@ -65,4 +65,4 @@ module.exports = http.postHandler(async function (body, req) {
   });
 
   return { body: { ok: true } };
-}, Object.assign({ scope: 'mise-a-disposition' }, http.FORM_LIMIT));
+});

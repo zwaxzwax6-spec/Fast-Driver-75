@@ -98,10 +98,6 @@
     return data;
   };
 
-  FD.todayParis = function () {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  };
-
   FD.esc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -110,8 +106,7 @@
 
   /* ---------- Autocomplétion API Adresse (gratuite, sans clé) ---------- */
   var API = 'https://api-adresse.data.gouv.fr/search/';
-  var IDF = ['75', '77', '78', '91', '92', '93', '94', '95'];
-  function isIdf(cp) { return typeof cp === 'string' && /^\d{5}$/.test(cp) && IDF.indexOf(cp.slice(0, 2)) !== -1; }
+  function isIdf(cp) { return window.FDPricing.isIdfPostcode(cp); } // règle unique, partagée avec le serveur
   FD.OUTSIDE_MSG = 'Adresse hors Île-de-France';
 
   /* opts.onSelect(place) — place = {label, lon, lat, postcode} ; opts.onClear() quand le texte change. */

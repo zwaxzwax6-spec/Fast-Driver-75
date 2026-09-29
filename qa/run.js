@@ -235,6 +235,15 @@ const MAP_PROBE = () => {
         for (const [label, sel] of [['en-tête services', '#services .rv >> nth=0'], ['flotte', '#flotte'], ['CTA final', '.final'], ['en-tête tarifs', '#tarifs .rv >> nth=0'], ['FAQ (titre)', '#faq .rv >> nth=0']]) {
           const tag = `${kind}-${label.replace(/\W+/g, '')}`;
           const fb = shot(`C1-before-${tag}.png`), fa = shot(`C1-after-${tag}.png`);
+          // Même grille de pixels des deux côtés : on cale l'élément sur un pixel physique entier
+          // (décalage relatif < 1 px, sans effet sur la mise en page).
+          for (const pg of [pb, pa]) {
+            await pg.locator(sel).first().evaluate(el => {
+              el.style.top = ''; el.style.position = getComputedStyle(el).position === 'static' ? 'relative' : el.style.position;
+              const dpr = devicePixelRatio, y = (el.getBoundingClientRect().top + scrollY) * dpr, frac = y - Math.floor(y);
+              if (frac > 0.001) el.style.top = ((1 - frac) / dpr) + 'px';
+            });
+          }
           await pb.locator(sel).first().screenshot({ path: fb });
           await pa.locator(sel).first().screenshot({ path: fa });
           const A = PNG.sync.read(fs.readFileSync(fb)), B = PNG.sync.read(fs.readFileSync(fa));
@@ -500,7 +509,7 @@ const MAP_PROBE = () => {
       await p.fill('#m-duree', '5 heures 30'); await p.fill('#m-details', 'Navettes invités entre la gare et le lieu');
       await fillContact(p, 'm'); await p.fill('#m-soc', 'Agence Lumière');
       await p.locator('#resa-card').screenshot({ path: shot('A4-plusieurs-vehicules-1280.png') });
-      await sleep(1000);
+      await sleep(3200); // anti-spam : un humain met plus de 3 s à remplir le formulaire
       before = mailFiles();
       await p.click('#mad-form button[type=submit]');
       await p.waitForSelector('#done:not([hidden])');

@@ -34,6 +34,7 @@ module.exports = http.postHandler(async function (body, req) {
     ['Disponibilités / horaires', d.horaires]
   ];
 
+  http.checkLimit(req, 'recrutement', http.FORM_LIMIT);
   await notify(req, {
     subject: subject,
     replyTo: d.email,
@@ -56,4 +57,4 @@ module.exports = http.postHandler(async function (body, req) {
   });
 
   return { body: { ok: true } };
-}, Object.assign({ scope: 'recrutement' }, http.FORM_LIMIT));
+});

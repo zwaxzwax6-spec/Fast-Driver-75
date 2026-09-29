@@ -28,16 +28,15 @@ module.exports = http.postHandler(async function (body) {
     }
     throw e;
   }
-  var pickup = body.date && body.time ? P.checkPickup(String(body.date), String(body.time)) : { night: false, error: null };
-  var price = P.computePrice({ mode: mode, km: r.distanceKm, bagages: bagages, night: pickup.night });
+  // Prix hors majoration de nuit : la page l'ajuste en direct selon la date et l'heure choisies.
+  var price = P.computePrice({ mode: mode, km: r.distanceKm, bagages: bagages });
   return {
     body: {
       ok: true,
       distanceKm: r.distanceKm,
       durationMin: r.durationMin,
       geometry: r.geometry,
-      price: price,
-      pickup: { night: pickup.night, error: pickup.error }
+      price: price
     }
   };
 }, { scope: 'quote', max: 30, windowMs: 60 * 1000 });

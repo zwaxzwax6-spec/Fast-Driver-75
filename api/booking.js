@@ -40,7 +40,7 @@ module.exports = http.postHandler(async function (body, req) {
   }
 
   // Adresses re-géocodées et itinéraire recalculé côté serveur : rien ne vient du navigateur.
-  var from = d.from, to = d.to, price = null, routeInfo = null;
+  var from = d.from, to = d.to, price = null, routeInfo = null, verified = false;
   var places = await Promise.all([d.from, d.to].map(function (label) {
     return geo.geocodeIdf(label).catch(function (e) { return e; });
   }));
@@ -54,6 +54,7 @@ module.exports = http.postHandler(async function (body, req) {
   if (!(places[0] instanceof geo.GeoError) && !(places[1] instanceof geo.GeoError)) {
     from = places[0].label;
     to = places[1].label;
+    verified = true;
     try {
       routeInfo = await route.getRoute(places[0], places[1]);
       price = P.computePrice({ mode: d.mode, km: routeInfo.distanceKm, bagages: bagages, night: pickup.night });
@@ -78,6 +79,7 @@ module.exports = http.postHandler(async function (body, req) {
   rows.push(['Nom', name], ['Téléphone', d.tel], ['E-mail', d.email], ['Commentaire', d.commentaire]);
 
   var view = priceView(price);
+  http.checkLimit(req, 'booking', http.FORM_LIMIT);
   await notify(req, {
     subject: subject,
     replyTo: d.email,
@@ -99,7 +101,8 @@ module.exports = http.postHandler(async function (body, req) {
     kicker: 'Demande reçue',
     title: 'Votre demande est bien reçue.',
     intro: 'Fast Driver vous confirme rapidement le tarif définitif.',
-    rows: rows.slice(0, 5),
+    // Adresses reprises seulement si elles viennent du géocodeur (jamais le texte brut saisi).
+    rows: rows.slice(0, 5).filter(function (r) { return verified || (r[0] !== 'Départ' && r[0] !== 'Arrivée'); }),
     price: view,
     note: 'Prix estimatif. Le tarif définitif vous est confirmé par Fast Driver.'
   });
@@ -111,4 +114,4 @@ module.exports = http.postHandler(async function (body, req) {
       from: from, to: to, when: when
     }
   };
-}, Object.assign({ scope: 'booking' }, http.FORM_LIMIT));
+});

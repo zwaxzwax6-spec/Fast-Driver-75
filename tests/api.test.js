@@ -308,3 +308,49 @@ test('corps JSON invalide -> 400 (req.body qui lève, comme sur Vercel)', async 
   });
   assert.equal(r.status, 400);
 });
+
+test('API Adresse qui renvoie autre chose que du JSON : prix à confirmer, pas de 500 ni de undefined', async () => {
+  const realFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+  clearMails();
+  try {
+    const r = await call(booking, base());
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const m = mails()[0];
+    assert.match(m.subject, /prix à confirmer/);
+    assert.doesNotMatch(m.html + m.text, /undefined/);
+    assert.ok(m.text.includes('160 Rue de Rivoli 75001 Paris'));
+  } finally { global.fetch = realFetch; }
+});
+
+test('confirmation client sans adresses si elles n’ont pas pu être vérifiées', async () => {
+  const realFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, json: async () => ({}) });
+  process.env.RESEND_DOMAIN_VERIFIED = 'true';
+  clearMails();
+  try {
+    await call(booking, { ...base(), from: 'Cliquez http://phishing.example 75001', to: 'Gagnez http://phishing.example' });
+  } finally { global.fetch = realFetch; delete process.env.RESEND_DOMAIN_VERIFIED; }
+  const client = mails().filter(m => m.to[0] !== 'delivered@resend.dev');
+  assert.equal(client.length, 1);
+  assert.doesNotMatch(client[0].html + client[0].text, /phishing/);
+});
+
+test('limiteur des formulaires : seules les demandes réellement envoyées comptent', async () => {
+  process.env.VERCEL_ENV = 'production';
+  try {
+    for (let i = 0; i < 15; i++) {
+      const r = await call(booking, { ...base(), email: 'invalide' }, 'POST', '198.51.100.20');
+      assert.equal(r.status, 400);
+    }
+  } finally { delete process.env.VERCEL_ENV; }
+});
+
+test('mise à disposition : heure de début déjà passée aujourd’hui refusée', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T16:00:00Z') }); // 18h00 à Paris
+  const r = await call(mad, { elapsed: 10000, nb_vehicules: '3', date: '2026-10-10', heure_debut: '09:00', heure_fin: '12:00', lieu: 'Paris', duree: '3 h', type: 'groupe', prenom: 'A', nom: 'B', tel: '0612345678', email: 'a@b.fr' });
+  assert.equal(r.status, 400);
+  assert.ok(r.json.errors.heure_debut);
+  const ok = await call(mad, { elapsed: 10000, nb_vehicules: '3', date: '2026-10-10', heure_debut: '20:00', heure_fin: '23:00', lieu: 'Paris', duree: '3 h', type: 'groupe', prenom: 'A', nom: 'B', tel: '0612345678', email: 'a@b.fr' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+});

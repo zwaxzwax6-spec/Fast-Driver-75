@@ -24,10 +24,12 @@
     note: $('q-note'), meta: $('route-meta'), map: $('route-map'), mapIn: $('route-map-in')
   };
 
-  var state = { mode: 'course', from: null, to: null, route: null, routeKey: '', seq: 0, failed: false };
+  var state = { mode: 'course', from: null, to: null, route: null, routeKey: '', seq: 0 };
 
   /* ---------- Onglets ---------- */
   function setMode(mode) {
+    var from = state.mode;
+    if (!done.hidden) resetAll(); // lien « Demander un devis » cliqué depuis l'écran de confirmation
     state.mode = mode;
     tabs.forEach(function (t) {
       var on = t.dataset.mode === mode;
@@ -43,8 +45,8 @@
     el.bag.disabled = mode !== 'course';
     if (!isFleet) calc.setAttribute('aria-labelledby', 'tab-' + mode);
     renderPrice();
-    // Retour sur Course/Colis : la carte a pu être masquée (ou jamais mesurée) pendant l'onglet flotte.
-    if (!isFleet && state.route && !el.map.classList.contains('stale')) showMap(state.route.geometry);
+    // Retour depuis l'onglet flotte : la carte a pu être masquée (ou jamais mesurée) entre-temps.
+    if (from === 'flotte' && !isFleet && state.route && !el.map.classList.contains('stale')) showMap(state.route.geometry);
   }
   tabs.forEach(function (t, i) {
     t.addEventListener('click', function () { setMode(t.dataset.mode); });
@@ -60,7 +62,7 @@
     a.addEventListener('click', function () { setMode(a.dataset.openTab); });
   });
 
-  var today = FD.todayParis();
+  var today = P.todayParis();
   el.date.min = today;
   $('m-date').min = today;
 
@@ -94,7 +96,6 @@
     state.seq++;
     state.route = null;
     state.routeKey = '';
-    state.failed = false;
     el.quote.hidden = true;
     el.alert.hidden = true;
     closeMap();
@@ -132,13 +133,11 @@
       if (my !== state.seq) return;
       el.wait.hidden = true;
       if (r.status === 200 && r.json.ok) {
-        state.failed = false;
         state.route = { km: r.json.distanceKm, min: r.json.durationMin, geometry: r.json.geometry };
         renderPrice();
         showMap(state.route.geometry);
       } else {
         state.route = null;
-        state.failed = true;
         closeMap();
         renderPrice();
         el.alert.textContent = (r.json && r.json.error && r.status === 400 ? r.json.error + '. ' : 'Calcul du prix indisponible pour le moment. ') +
@@ -163,7 +162,6 @@
     el.meta.querySelector('span').textContent = P.fmtKm(r.km) + ' km · environ ' + r.min + ' min';
     el.quote.hidden = false;
     el.box.hidden = el.note.hidden = el.meta.hidden = false;
-    state.price = price;
   }
 
   /* ---------- Carte (Leaflet en lazy load, au premier calcul uniquement) ---------- */
@@ -248,13 +246,8 @@
     }).join('');
   }
 
-  function frWhen(date, time) {
-    var d = date.split('-');
-    return d[2] + '/' + d[1] + '/' + d[0] + ' à ' + time.replace(':', 'h');
-  }
-
   function showBookingDone(data, res) {
-    var when = frWhen(data.date, data.time);
+    var when = res.when || data.date + ' ' + data.time;
     var priceText = res.price ? res.price.totalText : 'à confirmer';
     $('done-title').textContent = 'Demande envoyée';
     $('done-text').textContent = 'Merci ' + data.prenom + '. Fast Driver vous confirme votre ' +
@@ -284,7 +277,10 @@
     e.preventDefault();
     FD.clearErrors(mad);
     var v = FD.values(mad);
-    var extra = { date: v.date && v.date < FD.todayParis() ? 'Cette date est déjà passée.' : '' };
+    var extra = {
+      date: v.date && v.date < P.todayParis() ? 'Cette date est déjà passée.' : '',
+      heure_debut: v.date === P.todayParis() && v.heure_debut && v.heure_debut <= P.nowParisHm() ? 'Cette heure est déjà passée.' : ''
+    };
     if (FD.showErrors(mad, FD.check(mad, extra))) return;
     var data = FD.antispam(v, mad);
     busy(mad, true);
@@ -310,7 +306,7 @@
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  $('done-new').addEventListener('click', function () {
+  function resetAll() {
     calc.reset();
     mad.reset();
     el.dep.dispatchEvent(new Event('input'));
@@ -320,8 +316,9 @@
     FD.clearErrors(calc);
     FD.clearErrors(mad);
     card.querySelector('.tabs').hidden = false;
-    setMode(state.mode);
-  });
+    done.hidden = true;
+  }
+  $('done-new').addEventListener('click', function () { resetAll(); setMode(state.mode); });
 
   setMode('course');
 })();

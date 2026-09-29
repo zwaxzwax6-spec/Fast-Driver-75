@@ -56,15 +56,32 @@
     return { mode: mode, km: t / 10, bagages: bagages, night: !!opts.night, lines: lines, total: total / 100 };
   }
 
-  /* Décalage (ms) de Europe/Paris par rapport à UTC à l'instant donné. */
-  function parisOffset(ms) {
-    var parts = new Intl.DateTimeFormat('en-GB', {
+  var fmt = null;
+  function parisParts(ms) {
+    fmt = fmt || new Intl.DateTimeFormat('en-GB', {
       timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
-    }).formatToParts(new Date(ms));
+    });
     var p = {};
-    parts.forEach(function (x) { p[x.type] = Number(x.value); });
+    fmt.formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = Number(x.value); });
+    return p;
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  /* Décalage (ms) de Europe/Paris par rapport à UTC à l'instant donné. */
+  function parisOffset(ms) {
+    var p = parisParts(ms);
     return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+  }
+
+  /* Date du jour (AAAA-MM-JJ) et heure (HH:MM) à Paris. */
+  function todayParis(now) {
+    var p = parisParts((now || new Date()).getTime());
+    return p.year + '-' + pad(p.month) + '-' + pad(p.day);
+  }
+  function nowParisHm(now) {
+    var p = parisParts((now || new Date()).getTime());
+    return pad(p.hour) + ':' + pad(p.minute);
   }
 
   var DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -115,6 +132,8 @@
     parisWallToUtc: parisWallToUtc,
     checkPickup: checkPickup,
     PICKUP_MESSAGES: PICKUP_MESSAGES,
-    isIdfPostcode: isIdfPostcode
+    isIdfPostcode: isIdfPostcode,
+    todayParis: todayParis,
+    nowParisHm: nowParisHm
   };
 });

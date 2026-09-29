@@ -25,7 +25,9 @@ var BLOCKED = /^\/(\.|lib\/|scripts\/|tests\/|qa\/|test-output\/|node_modules\/|
 
 http.createServer(function (req, res) {
   var url = new URL(req.url, 'http://localhost');
-  var p = decodeURIComponent(url.pathname);
+  var p;
+  try { p = path.posix.normalize(decodeURIComponent(url.pathname)); } catch (e) { res.statusCode = 400; return res.end(); }
+  if (p.indexOf('/') !== 0 || p.indexOf('\0') !== -1) { res.statusCode = 400; return res.end(); }
 
   if (p.indexOf('/api/') === 0) {
     var name = p.slice(5).replace(/[^a-z0-9-]/gi, '');
@@ -44,7 +46,7 @@ http.createServer(function (req, res) {
   if (p.length > 1 && p.endsWith('/')) { res.statusCode = 308; res.setHeader('Location', p.slice(0, -1)); return res.end(); }
   var target = p === '/' ? '/index.html' : (path.extname(p) ? p : p + '.html');
   var abs = path.join(ROOT, path.normalize(target));
-  if (abs.indexOf(ROOT) !== 0 || BLOCKED.test(target) || !fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
+  if (abs.indexOf(ROOT + path.sep) !== 0 || BLOCKED.test(target) || !fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
     res.statusCode = 404;
     return res.end('Not found');
   }
@@ -52,6 +54,6 @@ http.createServer(function (req, res) {
   var gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '') && /html|javascript|css|json|svg/.test(res.getHeader('Content-Type'));
   if (gz) { res.setHeader('Content-Encoding', 'gzip'); fs.createReadStream(abs).pipe(zlib.createGzip()).pipe(res); }
   else fs.createReadStream(abs).pipe(res);
-}).listen(PORT, function () {
+}).listen(PORT, '127.0.0.1', function () {
   console.log('Fast Driver local : http://localhost:' + PORT + ' (mock=' + (process.env.MOCK_EXTERNAL === '1') + ')');
 });

@@ -69,3 +69,9 @@ test('codes postaux IDF', () => {
   for (const cp of ['75001', '77000', '78000', '91000', '92100', '93200', '94000', '95000']) assert.ok(P.isIdfPostcode(cp));
   for (const cp of ['59000', '60000', '7500', '', null, '2A004']) assert.ok(!P.isIdfPostcode(cp));
 });
+
+test('todayParis / nowParisHm partagés navigateur + serveur', () => {
+  const at = new Date('2026-10-10T22:30:00Z'); // 00h30 le 11 à Paris
+  assert.equal(P.todayParis(at), '2026-10-11');
+  assert.equal(P.nowParisHm(at), '00:30');
+});
