@@ -34,11 +34,11 @@ global.fetch = async (url) => {
   return { ok: true, json: async () => ({ features }) };
 };
 
-function call(handler, body, method = 'POST') {
+function call(handler, body, method = 'POST', ip = '203.0.113.' + Math.floor(Math.random() * 250)) {
   return new Promise((resolve) => {
     const req = Readable.from([Buffer.from(JSON.stringify(body))]);
     req.method = method;
-    req.headers = { host: 'localhost:3000' };
+    req.headers = { host: 'localhost:3000', 'x-forwarded-for': ip };
     const res = {
       statusCode: 200, headers: {},
       setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
@@ -63,22 +63,11 @@ function parisIn(hours, forceTime) {
   const p = Object.fromEntries(f.map(x => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, time: forceTime || `${p.hour}:${p.minute}` };
 }
-/* Prochaine date (≥ minHours) à laquelle 02:00 Paris tombe dans la fenêtre voulue. */
-function night2h(minHours, maxHours) {
-  for (let h = 0; h < 72; h++) {
-    const c = parisIn(h, '02:00');
-    const P = require(path.join(ROOT, 'assets/pricing.js'));
-    const at = P.parisWallToUtc(c.date, c.time).getTime() - Date.now();
-    if (at > minHours * 3600e3 && at < maxHours * 3600e3) return c;
-  }
-  throw new Error('no slot');
-}
-
 const base = () => ({
   mode: 'course', from: '160 Rue de Rivoli 75001 Paris', to: '300 Rue de Vaugirard 75015 Paris',
   ...parisIn(72, '14:30'), bagages: '1',
   prenom: 'Camille', nom: 'Martin', tel: '06 12 34 56 78', email: 'camille@example.com',
-  commentaire: 'Casque taille M', website: '', t0: Date.now() - 10000
+  commentaire: 'Casque taille M', website: '', elapsed: 10000
 });
 
 test('C5 prix falsifié ignoré : e-mail avec le prix recalculé', async () => {
@@ -120,10 +109,10 @@ test('C8 champs invalides : 400, erreurs par champ, aucun e-mail', async () => {
   assert.ok(r.json.errors.email);
   r = await call(booking, { ...base(), tel: '12345' });
   assert.ok(r.json.errors.tel);
-  r = await call(recrutement, { t0: Date.now() - 10000, prenom: 'A' });
+  r = await call(recrutement, { elapsed: 10000, prenom: 'A' });
   assert.equal(r.status, 400);
   assert.ok(r.json.errors.motivations && r.json.errors.email);
-  r = await call(mad, { t0: Date.now() - 10000, nb_vehicules: '1' });
+  r = await call(mad, { elapsed: 10000, nb_vehicules: '1' });
   assert.equal(r.status, 400);
   assert.ok(r.json.errors.nb_vehicules);
   assert.equal(mails().length, 0);
@@ -142,21 +131,24 @@ test('C9 honeypot ou envoi < 3 s : 200 silencieux, aucun e-mail', async () => {
   for (const h of [booking, recrutement, mad]) {
     let r = await call(h, { ...base(), website: 'http://spam' });
     assert.equal(r.status, 200); assert.equal(r.json.ok, true);
-    r = await call(h, { ...base(), t0: Date.now() - 1000 });
+    r = await call(h, { ...base(), elapsed: 1000 });
     assert.equal(r.status, 200); assert.equal(r.json.ok, true);
-    r = await call(h, { ...base(), t0: undefined });
+    r = await call(h, { ...base(), elapsed: undefined });
     assert.equal(r.status, 200);
   }
   assert.equal(mails().length, 0);
 });
 
-test('C6 course à 02h00 dans moins de 24 h bloquée, plus de 24 h acceptée +10 €', async () => {
+test('C6 course à 02h00 dans moins de 24 h bloquée, plus de 24 h acceptée +10 €', async (t) => {
+  // Horloge figée : 10/10/2026 12h00 à Paris (10h00 UTC).
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
   clearMails();
-  let r = await call(booking, { ...base(), ...night2h(0.5, 24) });
+  const body = (date) => ({ ...base(), date, time: '02:00', elapsed: 10000 });
+  let r = await call(booking, body('2026-10-11')); // dans 14 h
   assert.equal(r.status, 422);
   assert.match(r.json.errors.time, /24h à l’avance/);
   assert.equal(mails().length, 0);
-  r = await call(booking, { ...base(), ...night2h(24.5, 72) });
+  r = await call(booking, body('2026-10-12')); // dans 38 h
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.price.total, 45); // 30 + 5 bagage + 10 nuit
   assert.match(mails()[0].html, /nuit/i);
@@ -165,7 +157,7 @@ test('C6 course à 02h00 dans moins de 24 h bloquée, plus de 24 h acceptée +10
 test('C7m recrutement : sujet, reply-to, tous les champs', async () => {
   clearMails();
   const body = {
-    t0: Date.now() - 10000, website: '', nom: 'Diallo', prenom: 'Moussa', tel: '+33 7 66 13 98 50', email: 'MOUSSA@example.com',
+    elapsed: 10000, website: '', nom: 'Diallo', prenom: 'Moussa', tel: '+33 7 66 13 98 50', email: 'MOUSSA@example.com',
     vehicule_modele: 'Honda Forza 750', vehicule_cylindree: '750 cm3', experience_pro: '5 ans coursier',
     experience_secteur: 'Taxi moto 2 ans', motivations: 'Rouler dans Paris', disponibilite: 'temps plein', horaires: 'Soirs et week-ends'
   };
@@ -174,7 +166,7 @@ test('C7m recrutement : sujet, reply-to, tous les champs', async () => {
   const m = mails()[0];
   assert.equal(m.subject, '[Candidature] Candidature chauffeur : Moussa Diallo');
   assert.equal(m.reply_to, 'moussa@example.com');
-  for (const k of Object.keys(body).filter(k => !['t0', 'website', 'email', 'tel'].includes(k))) {
+  for (const k of Object.keys(body).filter(k => !['elapsed', 'website', 'email', 'tel'].includes(k))) {
     assert.ok(m.html.includes(body[k]) && m.text.includes(body[k]), k);
   }
   assert.ok(m.text.includes('07 66 13 98 50'));
@@ -184,7 +176,7 @@ test('C7m mise à disposition : sujet « N véhicules le JJ/MM », tous les cham
   clearMails();
   const { date } = parisIn(24 * 10);
   const body = {
-    t0: Date.now() - 10000, website: '', nb_vehicules: '4', date, heure_debut: '18:00', heure_fin: '23:30',
+    elapsed: 10000, website: '', nb_vehicules: '4', date, heure_debut: '18:00', heure_fin: '23:30',
     lieu: 'Parc des Expositions, Paris 15e', duree: '5 heures 30', type: 'événement', details: 'Navette invités',
     prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr', societe: 'Société X'
   };
@@ -246,4 +238,73 @@ test('C14 sur Vercel : mock ignoré, sans clé ORS -> 503 propre, jamais de faux
 test('méthode GET refusée', async () => {
   const r = await call(booking, {}, 'GET');
   assert.equal(r.status, 405);
+});
+
+test('horloge du téléphone en avance : la demande passe (délai mesuré sur la page)', async () => {
+  clearMails();
+  const r = await call(booking, { ...base(), t0: Date.now() + 300000, elapsed: 45000 });
+  assert.equal(r.status, 200);
+  assert.equal(mails().length, 1);
+});
+
+test('champs sur une ligne : retours à la ligne neutralisés (sujet propre)', async () => {
+  clearMails();
+  const r = await call(booking, { ...base(), prenom: 'Jean\r\nBcc: x@y.z' });
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(mails()[0].subject, /[\r\n]/);
+});
+
+test('e-mail avec ?, & ou = refusé', async () => {
+  const r = await call(booking, { ...base(), email: 'x?cc=boss@evil.com' });
+  assert.equal(r.status, 400);
+  assert.ok(r.json.errors.email);
+});
+
+test('date impossible refusée (31/02)', async () => {
+  const r = await call(mad, { elapsed: 10000, nb_vehicules: '3', date: '2027-02-31', heure_debut: '10:00', heure_fin: '12:00', lieu: 'Paris', duree: '2 h', type: 'groupe', prenom: 'A', nom: 'B', tel: '0612345678', email: 'a@b.fr' });
+  assert.equal(r.status, 400);
+  assert.ok(r.json.errors.date);
+});
+
+test('confirmation client : gabarit fixe, aucun texte libre saisi', async () => {
+  clearMails();
+  process.env.RESEND_DOMAIN_VERIFIED = 'true';
+  try {
+    await call(booking, { ...base(), prenom: 'Achetez ici', commentaire: 'http://phishing.example' });
+    await call(recrutement, { elapsed: 10000, nom: 'X', prenom: 'Spam', tel: '0612345678', email: 'v@ex.fr', vehicule_modele: 'm', vehicule_cylindree: 'c', experience_pro: 'http://phishing.example', experience_secteur: 's', motivations: 'm', disponibilite: 'temps plein', horaires: 'h' });
+  } finally { delete process.env.RESEND_DOMAIN_VERIFIED; }
+  const client = mails().filter(m => m.to[0] !== 'delivered@resend.dev');
+  assert.equal(client.length, 2);
+  for (const m of client) {
+    assert.doesNotMatch(m.html + m.text + m.subject, /phishing|Achetez|Spam/);
+  }
+});
+
+test('origine étrangère refusée', async () => {
+  const req = Readable.from([Buffer.from(JSON.stringify(base()))]);
+  req.method = 'POST';
+  req.headers = { host: 'fast-driver-75.fr', origin: 'https://evil.example' };
+  const r = await new Promise((resolve) => {
+    booking(req, { statusCode: 200, setHeader() { }, end(s) { resolve({ status: this.statusCode, json: JSON.parse(s) }); } });
+  });
+  assert.equal(r.status, 403);
+});
+
+test('limiteur : /api/quote plafonné par IP hors mode local', async () => {
+  process.env.VERCEL_ENV = 'production';
+  try {
+    let last;
+    for (let i = 0; i < 31; i++) last = await call(quote, { mode: 'course', from: { lon: 2.3, lat: 48.8 }, to: { lon: 2.35, lat: 48.85 } }, 'POST', '198.51.100.7');
+    assert.equal(last.status, 429);
+    const other = await call(quote, { mode: 'course', from: { lon: 2.3, lat: 48.8 }, to: { lon: 2.35, lat: 48.85 } }, 'POST', '198.51.100.8');
+    assert.notEqual(other.status, 429);
+  } finally { delete process.env.VERCEL_ENV; }
+});
+
+test('corps JSON invalide -> 400 (req.body qui lève, comme sur Vercel)', async () => {
+  const req = { method: 'POST', headers: { host: 'x' }, get body() { throw new Error('Invalid JSON'); } };
+  const r = await new Promise((resolve) => {
+    booking(req, { statusCode: 200, setHeader() { }, end(s) { resolve({ status: this.statusCode, json: JSON.parse(s) }); } });
+  });
+  assert.equal(r.status, 400);
 });

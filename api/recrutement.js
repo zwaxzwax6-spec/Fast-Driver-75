@@ -12,9 +12,9 @@ module.exports = http.postHandler(async function (body, req) {
   V.contact(v)
     .field('vehicule_modele', { max: 80 })
     .field('vehicule_cylindree', { max: 20 })
-    .field('experience_pro', { max: 1500 })
-    .field('experience_secteur', { max: 1500 })
-    .field('motivations', { max: 1500 })
+    .field('experience_pro', { multiline: true, max: 1500 })
+    .field('experience_secteur', { multiline: true, max: 1500 })
+    .field('motivations', { multiline: true, max: 1500 })
     .field('disponibilite', { oneOf: ['temps plein', 'temps partiel'] })
     .field('horaires', { max: 500 });
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
@@ -46,13 +46,14 @@ module.exports = http.postHandler(async function (body, req) {
       { label: 'Répondre', href: 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + subject) }
     ]
   }, {
+    // Gabarit fixe : aucun texte saisi n'est renvoyé à l'adresse fournie.
     to: d.email,
     subject: 'Votre candidature chauffeur · Fast Driver 75',
     kicker: 'Candidature reçue',
-    title: 'Merci ' + d.prenom + ', votre candidature est bien reçue.',
+    title: 'Votre candidature est bien reçue.',
     intro: 'Fast Driver revient vers vous rapidement.',
-    rows: rows.slice(4)
+    rows: [['Disponibilité', d.disponibilite]]
   });
 
   return { body: { ok: true } };
-});
+}, Object.assign({ scope: 'recrutement' }, http.FORM_LIMIT));

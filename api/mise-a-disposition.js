@@ -23,7 +23,7 @@ module.exports = http.postHandler(async function (body, req) {
     .field('lieu', { max: 200 })
     .field('duree', { max: 100 })
     .field('type', { oneOf: TYPES })
-    .field('details', { required: false, max: 2000 });
+    .field('details', { multiline: true, required: false, max: 2000 });
   V.contact(v).field('societe', { required: false, max: 120 });
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
   var d = v.data;
@@ -55,13 +55,14 @@ module.exports = http.postHandler(async function (body, req) {
       { label: 'Répondre', href: 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + subject) }
     ]
   }, {
+    // Gabarit fixe : seules des valeurs contrôlées (nombre, date, heures, type) sont reprises.
     to: d.email,
     subject: 'Votre demande de devis · Fast Driver 75',
     kicker: 'Demande reçue',
-    title: 'Merci ' + d.prenom + ', votre demande est bien reçue.',
+    title: 'Votre demande est bien reçue.',
     intro: 'Nous revenons vers vous avec un devis personnalisé.',
-    rows: rows.slice(0, 7)
+    rows: [rows[0], rows[1], rows[2], rows[5]]
   });
 
   return { body: { ok: true } };
-});
+}, Object.assign({ scope: 'mise-a-disposition' }, http.FORM_LIMIT));

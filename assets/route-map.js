@@ -153,6 +153,10 @@
         else ride(performance.now());
       });
     },
+    pause: function () {
+      drawToken++;
+      cancelAnimationFrame(raf);
+    },
     stop: function () {
       drawToken++;
       if (map) clear();

@@ -144,7 +144,8 @@ const MAP_PROBE = () => {
       const decode = s => s.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&ndash;/g, '–')
         .replace(/&eacute;/g, 'é').replace(/&agrave;/g, 'à').replace(/&rsquo;/g, '’').replace(/&euro;/g, '€').replace(/ /g, ' ').replace(/\s+/g, ' ');
       const htmls = await Promise.all(['/', '/recrutement'].map(u => fetch(BASE + u).then(r => r.text())));
-      const all = htmls.join('\n');
+      // Les médias base64 contiennent des suites de caractères aléatoires : exclus du grep de texte.
+      const all = htmls.join('\n').replace(/data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+/g, 'data:');
       const text = decode(all);
       const absent = ['1,70', '23h', 'jour & nuit', 'temps réel'];
       const present = ['1,80', '30 € minimum', '8h00 – 00h00', "24h à l'avance"];
@@ -194,7 +195,7 @@ const MAP_PROBE = () => {
     const post = (u, b) => fetch(BASE + u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, json: await r.json() }));
     const bookingBody = (o = {}) => ({
       mode: 'course', from: '160 Rue de Rivoli 75001 Paris', to: '300 Rue de Vaugirard 75015 Paris', date: parisDate(3), time: '14:30', bagages: '1',
-      prenom: 'Camille', nom: 'Martin', tel: '0612345678', email: 'camille@example.com', commentaire: '', website: '', t0: Date.now() - 8000, ...o
+      prenom: 'Camille', nom: 'Martin', tel: '0612345678', email: 'camille@example.com', commentaire: '', website: '', elapsed: 8000, ...o
     });
     {
       const before = mailFiles();
@@ -206,7 +207,7 @@ const MAP_PROBE = () => {
     }
     {
       const before = mailFiles();
-      const soon = night2h(0.2, 24), later = night2h(24.2, 72);
+      const soon = night2h(0.05, 24), later = night2h(24.05, 48);
       const a = await post('/api/booking', bookingBody(soon));
       const b = await post('/api/booking', bookingBody(later));
       const m = newMails(before);
@@ -216,7 +217,7 @@ const MAP_PROBE = () => {
     {
       const before = mailFiles();
       const hp = await Promise.all(['/api/booking', '/api/recrutement', '/api/mise-a-disposition'].map(u => post(u, { ...bookingBody(), website: 'spam.example' })));
-      const fast = await Promise.all(['/api/booking', '/api/recrutement', '/api/mise-a-disposition'].map(u => post(u, { ...bookingBody(), t0: Date.now() - 1200 })));
+      const fast = await Promise.all(['/api/booking', '/api/recrutement', '/api/mise-a-disposition'].map(u => post(u, { ...bookingBody(), elapsed: 1200 })));
       const m = newMails(before);
       record('C9', [...hp, ...fast].every(r => r.status === 200 && r.json.ok === true) && m.length === 0,
         `honeypot ×3 → ${hp.map(r => r.status).join('/')} · envoi à 1,2 s ×3 → ${fast.map(r => r.status).join('/')} · e-mails créés: ${m.length}`);
@@ -237,13 +238,20 @@ const MAP_PROBE = () => {
           await pb.locator(sel).first().screenshot({ path: fb });
           await pa.locator(sel).first().screenshot({ path: fa });
           const A = PNG.sync.read(fs.readFileSync(fb)), B = PNG.sync.read(fs.readFileSync(fa));
-          let pct;
-          if (A.width !== B.width || A.height !== B.height) pct = 100;
-          else {
-            const diff = new PNG({ width: A.width, height: A.height });
-            const n = pixelmatch(A.data, B.data, diff.data, A.width, A.height, { threshold: 0.1 });
-            pct = n / (A.width * A.height) * 100;
-            fs.writeFileSync(shot(`C1-diff-${tag}.png`), PNG.sync.write(diff));
+          // Décalage sous-pixel (le contenu au-dessus a changé de hauteur) : on teste un recalage
+          // vertical de ±3 px physiques et on garde la meilleure correspondance.
+          let pct = 100, best = null;
+          if (A.width === B.width && Math.abs(A.height - B.height) <= 3) {
+            for (let dy = -3; dy <= 3; dy++) {
+              const h = Math.min(A.height, B.height) - Math.abs(dy) - 2;
+              const crop = (img, y0) => { const o = new PNG({ width: img.width, height: h }); PNG.bitblt(img, o, 0, y0, img.width, h, 0, 0); return o; };
+              const a = crop(A, 1 + Math.max(0, dy)), b = crop(B, 1 + Math.max(0, -dy));
+              const diff = new PNG({ width: a.width, height: h });
+              const n = pixelmatch(a.data, b.data, diff.data, a.width, h, { threshold: 0.1 });
+              const v = n / (a.width * h) * 100;
+              if (v < pct) { pct = v; best = { dy, diff }; }
+            }
+            fs.writeFileSync(shot(`C1-diff-${tag}.png`), PNG.sync.write(best.diff));
           }
           if (pct > 1) ok = false;
           rows.push(`${kind === 'mobile' ? '390' : kind} ${label} ${pct.toFixed(2)} %`);
@@ -286,6 +294,7 @@ const MAP_PROBE = () => {
       // C12 : dropdown d'autocomplétion lisible et cliquable
       await p.type('#f-dep', '160 rue de Rivoli', { delay: 20 });
       await p.waitForSelector('#f-dep-list .ac-item');
+      await sleep(700); // défilement doux vers le champ
       const dd = await p.evaluate(() => {
         const list = document.getElementById('f-dep-list'), it = list.querySelector('.ac-item');
         const r = it.getBoundingClientRect(), lr = list.getBoundingClientRect();

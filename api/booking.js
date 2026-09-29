@@ -29,7 +29,7 @@ module.exports = http.postHandler(async function (body, req) {
     .field('date', { max: 10, check: V.checkDate })
     .field('time', { max: 5, check: V.checkTime })
     .field('bagages', { required: false, max: 1, check: function (x) { return /^[0-3]$/.test(x) ? null : 'Entre 0 et 3 bagages.'; }, map: Number });
-  V.contact(v).field('commentaire', { required: false, max: 1000 });
+  V.contact(v).field('commentaire', { multiline: true, required: false, max: 1000 });
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
   var d = v.data;
   var bagages = d.mode === 'course' ? (d.bagages || 0) : 0;
@@ -93,12 +93,13 @@ module.exports = http.postHandler(async function (body, req) {
       { label: 'Voir l’itinéraire', href: T.mapsUrl(from, to) }
     ]
   }, {
+    // Gabarit fixe : aucun texte libre saisi (nom, commentaire) n'est renvoyé à l'adresse fournie.
     to: d.email,
     subject: 'Votre demande ' + (d.mode === 'course' ? 'de course' : 'de livraison') + ' du ' + V.frDate(d.date) + ' · Fast Driver 75',
     kicker: 'Demande reçue',
-    title: 'Merci ' + d.prenom + ', votre demande est bien reçue.',
+    title: 'Votre demande est bien reçue.',
     intro: 'Fast Driver vous confirme rapidement le tarif définitif.',
-    rows: rows.filter(function (r) { return ['Nom', 'Téléphone', 'E-mail'].indexOf(r[0]) === -1; }),
+    rows: rows.slice(0, 5),
     price: view,
     note: 'Prix estimatif. Le tarif définitif vous est confirmé par Fast Driver.'
   });
@@ -110,4 +111,4 @@ module.exports = http.postHandler(async function (body, req) {
       from: from, to: to, when: when
     }
   };
-});
+}, Object.assign({ scope: 'booking' }, http.FORM_LIMIT));

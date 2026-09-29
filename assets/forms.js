@@ -4,9 +4,11 @@
   'use strict';
 
   var FD = window.FD = window.FD || {};
-  FD.t0 = Date.now();
+  // Délai de remplissage mesuré sur la page (horloge monotone, indépendante de l'heure du téléphone).
+  var loadedAt = window.performance && performance.now ? performance.now() : Date.now();
+  FD.elapsed = function () { return Math.round((window.performance && performance.now ? performance.now() : Date.now()) - loadedAt); };
 
-  var EMAIL_RE = /^[^\s@<>()[\],;:"]+@[^\s@<>()[\],;:"]+\.[a-z]{2,}$/i;
+  var EMAIL_RE = /^[a-z0-9._+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i;
   var PHONE_RE = /^(?:\+33|0033|0)[1-9]\d{8}$/;
 
   FD.isEmail = function (v) { return EMAIL_RE.test(v); };
@@ -51,7 +53,10 @@
     if (!f) return false;
     f.classList.toggle('invalid', !!msg);
     var p = f.querySelector('.f-err');
-    if (p) p.textContent = msg || '';
+    if (p) {
+      p.textContent = msg || '';
+      if (!p.id) p.id = 'err-' + (form.id || 'f') + '-' + name;
+    }
     var input = f.querySelector('input,select,textarea');
     if (input) {
       if (msg) {
@@ -89,7 +94,7 @@
   FD.antispam = function (data, form) {
     var hp = form.querySelector('input[name="website"]');
     data.website = hp ? hp.value : '';
-    data.t0 = FD.t0;
+    data.elapsed = FD.elapsed();
     return data;
   };
 
@@ -144,6 +149,13 @@
       });
       list.hidden = false;
       input.setAttribute('aria-expanded', 'true');
+      // Mobile (clavier ouvert) : si la liste dépasse l'écran visible, on remonte le champ sous la navbar.
+      var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      var lr = list.getBoundingClientRect();
+      if (lr.bottom > vh) {
+        var top = input.getBoundingClientRect().top - 96;
+        if (top > 0) window.scrollBy({ top: Math.min(top, lr.bottom - vh + 12), behavior: 'smooth' });
+      }
     }
     function highlight(i) {
       var lis = list.querySelectorAll('.ac-item');
@@ -154,6 +166,10 @@
     function choose(i) {
       var f = items[i];
       if (!f) return;
+      // Annule toute recherche en attente : elle rouvrirait la liste sur l'adresse choisie.
+      clearTimeout(timer);
+      seq++;
+      if (ctrl) ctrl.abort();
       var p = f.properties;
       input.value = p.label;
       input.dataset.chosen = p.label;

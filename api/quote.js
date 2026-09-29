@@ -40,4 +40,4 @@ module.exports = http.postHandler(async function (body) {
       pickup: { night: pickup.night, error: pickup.error }
     }
   };
-});
+}, { scope: 'quote', max: 30, windowMs: 60 * 1000 });

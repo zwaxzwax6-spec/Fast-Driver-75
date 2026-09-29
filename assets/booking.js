@@ -41,7 +41,10 @@
     mad.hidden = !isFleet;
     el.bagWrap.hidden = mode !== 'course';
     el.bag.disabled = mode !== 'course';
+    if (!isFleet) calc.setAttribute('aria-labelledby', 'tab-' + mode);
     renderPrice();
+    // Retour sur Course/Colis : la carte a pu être masquée (ou jamais mesurée) pendant l'onglet flotte.
+    if (!isFleet && state.route && !el.map.classList.contains('stale')) showMap(state.route.geometry);
   }
   tabs.forEach(function (t, i) {
     t.addEventListener('click', function () { setMode(t.dataset.mode); });
@@ -64,11 +67,11 @@
   /* ---------- Adresses ---------- */
   FD.autocomplete(el.dep, $('f-dep-list'), {
     onSelect: function (p) { state.from = p; requestQuote(); },
-    onClear: function () { state.from = null; clearQuote(); }
+    onClear: function () { state.from = null; staleQuote(); }
   });
   FD.autocomplete(el.arr, $('f-arr-list'), {
     onSelect: function (p) { state.to = p; requestQuote(); },
-    onClear: function () { state.to = null; clearQuote(); }
+    onClear: function () { state.to = null; staleQuote(); }
   });
 
   /* ---------- Date / heure : règle de nuit ---------- */
@@ -95,6 +98,21 @@
     el.quote.hidden = true;
     el.alert.hidden = true;
     closeMap();
+  }
+
+  /* Adresse en cours de modification : le prix disparaît, la carte reste ouverte (atténuée)
+     jusqu'au nouveau tracé, qui se redessine dans la même carte. */
+  function staleQuote() {
+    state.seq++;
+    state.route = null;
+    state.routeKey = '';
+    el.alert.hidden = true;
+    el.wait.hidden = true;
+    renderPrice();
+    if (el.map.classList.contains('open')) {
+      el.map.classList.add('stale');
+      if (window.FDMap) window.FDMap.pause();
+    } else el.quote.hidden = true;
   }
 
   function requestQuote() {
@@ -179,13 +197,14 @@
   function showMap(geometry) {
     var my = state.seq;
     loadMap().then(function (FDMap) {
-      if (my !== state.seq) return;
+      if (my !== state.seq || calc.hidden) return; // jamais d'initialisation dans un onglet masqué
+      el.map.classList.remove('stale');
       el.map.classList.add('open');
       FDMap.show(el.mapIn, geometry, { onFail: closeMap });
     }).catch(closeMap);
   }
   function closeMap() {
-    el.map.classList.remove('open');
+    el.map.classList.remove('open', 'stale');
     if (window.FDMap) window.FDMap.stop();
   }
 
