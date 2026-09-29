@@ -1,0 +1,5 @@
+qa/
+tests/
+scripts/
+test-output/
+.env.local
