@@ -1,0 +1,22 @@
+const { chromium, devices } = require('playwright');
+(async () => {
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ ...devices['iPhone 13'], locale: 'fr-FR', timezoneId: 'Europe/Paris', viewport: { width: 390, height: 844 } });
+  const p = await ctx.newPage();
+  const errs = [];
+  p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  p.on('pageerror', e => errs.push(String(e)));
+  await p.goto('http://localhost:4175/#reserver', { waitUntil: 'load' });
+  await p.addStyleTag({ content: '.rv{opacity:1!important;transform:none!important}' });
+  await p.fill('#f-dep', '160 rue de rivoli');
+  await p.waitForSelector('#f-dep-list .ac-item');
+  await p.click('#f-dep-list .ac-item >> nth=0');
+  await p.fill('#f-arr', '300 rue de vaugirard');
+  await p.waitForSelector('#f-arr-list .ac-item');
+  await p.click('#f-arr-list .ac-item >> nth=0');
+  await p.waitForSelector('#q-box:not([hidden])');
+  await p.waitForTimeout(3500);
+  await p.locator('#resa-card').screenshot({ path: '../test-output/smoke-card.png' });
+  console.log('errors', errs);
+  await b.close();
+})();
