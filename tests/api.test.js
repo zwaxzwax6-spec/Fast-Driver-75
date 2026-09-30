@@ -665,3 +665,16 @@ test('Resend : clé révoquée ou domaine refusé (401/403/422) = erreur de conf
     });
   }
 });
+
+test('Resend : 8 numéros déjà pris d’affilée → numéros de secours au hasard, la réservation passe', async () => {
+  await onVercel(async () => {
+    let n = 0;
+    const sent = fakeNet(() => (++n <= 8 ? reply(409, { name: 'invalid_idempotent_request' }) : reply(200, { id: 'ok' })));
+    const r = await call(booking, base());
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(new Set(sent.map(x => x.key)).size, sent.length, 'jamais deux fois la même clé');
+    assert.equal(sent[sent.length - 1].key, 'fd-ref-' + r.json.ref);
+    // En-tête X-Entity-Ref-ID = numéro : une double soumission identique n'envoie pas deux e-mails.
+    assert.equal(sent[sent.length - 1].body.headers['X-Entity-Ref-ID'], r.json.ref);
+  });
+});

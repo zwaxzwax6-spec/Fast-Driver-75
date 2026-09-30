@@ -279,8 +279,14 @@
   function showBookingDone(data, res) {
     var rows = [['Départ', res.from || data.from], ['Arrivée', res.to || data.to], ['Prise en charge', res.when || data.date + ' ' + data.time]];
     if (data.mode === 'course') rows.push(['Bagages', data.bagages]);
-    var priceText = res.price ? res.price.totalText : 'à confirmer';
-    showDone(res, recapRows(rows) + '<div class="q-total"><span>Prix estimatif</span><b>' + FD.esc(priceText) + '</b></div>');
+    showDone(res, { rows: rows, total: res.price ? res.price.totalText : 'à confirmer' });
+  }
+
+  /* Récapitulatif : données seulement (jamais de HTML stocké), échappées à chaque affichage. */
+  function recapHtml(recap) {
+    if (!recap || !Array.isArray(recap.rows)) return '';
+    return recapRows(recap.rows) +
+      (recap.total ? '<div class="q-total"><span>Prix estimatif</span><b>' + FD.esc(recap.total) + '</b></div>' : '');
   }
 
   /* Lien WhatsApp : wa.me (fourni par le serveur) sur mobile, WhatsApp Web sur ordinateur. */
@@ -305,8 +311,9 @@
   function renderDone(url, ref, recap) {
     var wa = $('done-wa');
     done.querySelector('.done-ico').classList.toggle('wa', !!url);
-    $('done-box').innerHTML = url ? recap : '';
-    $('done-box').hidden = !url || !recap;
+    var box = url ? recapHtml(recap) : '';
+    $('done-box').innerHTML = box;
+    $('done-box').hidden = !box;
     if (url) {
       $('done-title').textContent = 'Dernière étape';
       $('done-text').innerHTML = 'Envoyez le message WhatsApp qui vient de s’ouvrir.<br>Fast Driver vous confirme ensuite votre réservation.' +
@@ -317,7 +324,7 @@
       // Pas de message prérempli (réponse sans numéro) : on garde un accès direct à Fast Driver sur WhatsApp.
       $('done-title').textContent = 'Demande envoyée';
       $('done-text').textContent = 'Merci, Fast Driver revient vers vous très vite. Une question ? Écrivez-nous sur WhatsApp.';
-      wa.href = 'https://wa.me/33766139850';
+      wa.href = 'https://wa.me/' + (window.FDWhatsApp ? window.FDWhatsApp.PHONE : '33766139850');
       wa.hidden = false;
     }
     openDone();
@@ -352,7 +359,7 @@
       busy(mad, false);
       if (r.status === 200 && r.json.ok) {
         var rc = r.json.recap;
-        return showDone(r.json, rc ? recapRows([['Véhicules', rc.vehicules], ['Date', rc.date], ['Horaires', rc.horaires]]) : '');
+        return showDone(r.json, rc ? { rows: [['Véhicules', rc.vehicules], ['Date', rc.date], ['Horaires', rc.horaires]] } : null);
       }
       if (r.json && r.json.errors) return FD.showErrors(mad, r.json.errors, r.json.error);
       mad.querySelector('.form-err').textContent = (r.json && r.json.error) || 'Envoi impossible pour le moment. Réessayez dans un instant.';

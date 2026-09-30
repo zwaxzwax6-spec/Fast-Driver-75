@@ -21,6 +21,8 @@
     var ua = (nav && nav.userAgent) || '';
     if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return false;
     if (/Macintosh/.test(ua) && nav.maxTouchPoints > 1) return false;
+    // Tablette Android en « version pour ordinateur » : UA Linux + écran tactile (Chromebook exclu).
+    if (/Linux/.test(ua) && !/CrOS/.test(ua) && nav.maxTouchPoints > 1) return false;
     if (nav && nav.userAgentData && nav.userAgentData.mobile === true) return false; // signal mobile en plus
     return true;
   }

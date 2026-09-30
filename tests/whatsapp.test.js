@@ -63,3 +63,20 @@ test('détection ordinateur : iPhone, Android et iPad (UA Mac tactile) = mobile'
   assert.equal(WA.isDesktop({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15', maxTouchPoints: 0 }), true);
   assert.equal(WA.isDesktop({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128 Safari/537.36', maxTouchPoints: 0 }), true);
 });
+
+test('tablette Android en « version pour ordinateur » (UA Linux, écran tactile) = mobile', () => {
+  const ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36';
+  assert.equal(WA.isDesktop({ userAgent: ua, maxTouchPoints: 10, userAgentData: { mobile: false } }), false);
+  assert.equal(WA.isDesktop({ userAgent: 'Mozilla/5.0 (X11; CrOS x86_64 15000.0.0) Chrome/128', maxTouchPoints: 10 }), true);
+});
+
+test('numéro de secours : minute tirée au hasard dans les 24 h à venir, hors de la séquence commune', () => {
+  const now = Date.parse('2026-10-01T12:00:00Z');
+  const seq = new Set(); const g = Ref.generator();
+  for (let i = 0; i < 20; i++) seq.add(g(now));
+  const alt = new Set();
+  for (let i = 0; i < 20; i++) alt.add(Ref.spareRef(now));
+  assert.ok(alt.size >= 18, 'tirages variés');
+  assert.ok([...alt].filter(r => seq.has(r)).length <= 2, 'pas la séquence que suivent les autres instances');
+  for (const r of alt) assert.match(r, REF_RE);
+});
