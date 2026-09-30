@@ -9,7 +9,7 @@
   'use strict';
 
   var L = window.L;
-  var FADE_IN_MS = 300, DRAW_MS = 1400, COUNT_MS = 600, FADE_OUT_MS = 200;
+  var FADE_IN_MS = 300, DEPART_MS = 350, DRAW_MS = 1400, COUNT_MS = 600, FADE_OUT_MS = 200;
   var LOOP_MS = 3500, PAUSE_MS = 1200, TRAIL = 0.15, TRAIL_DOTS = 32, SEGMENTS = 80;
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -209,14 +209,19 @@
     pill.classList.remove('on');
   }
 
-  /* c. → e. : tracé + caméra synchronisés (même durée), puis arrivée, compteur, boucle. */
-  function play(my, bounds) {
-    if (my !== token) return;
+  /* Nouvel itinéraire en place (tracé invisible), marqueur de départ affiché avec son halo (étape b). */
+  function prepare() {
     clearRoute();
     buildPath();
     addMarkers();
     segs = buildSegments();
-    requestAnimationFrame(function () { if (depMarker) depMarker.getElement().classList.add('on'); });
+    depMarker.getElement().getBoundingClientRect(); // l'état initial (invisible) est appliqué avant la transition
+    depMarker.getElement().classList.add('on');
+  }
+
+  /* c. → e. : tracé + caméra synchronisés (même durée), puis arrivée, compteur, boucle. */
+  function play(my, bounds) {
+    if (my !== token) return;
     map.flyToBounds(bounds, { padding: [34, 34], duration: DRAW_MS / 1000, easeLinearity: 0.35 });
     setState('draw');
     t0 = performance.now();
@@ -264,8 +269,12 @@
         var z = Math.min(16, map.getBoundsZoom(bounds, false, L.point(68, 68)) + 1);
         map.setView(latlngs[0], z, { animate: false });
         setState('intro');
-        requestAnimationFrame(function () { root.classList.add('rm-shown'); });
-        setTimeout(function () { play(my, bounds); }, FADE_IN_MS);
+        requestAnimationFrame(function () {
+          if (my !== token) return;
+          root.classList.add('rm-shown'); // a. fondu
+          prepare();                      // b. départ + halo, caméra sur le départ
+        });
+        setTimeout(function () { play(my, bounds); }, FADE_IN_MS + DEPART_MS); // c. après un temps sur le départ
       } else if (segs.length) {
         // Changement d'adresse : l'ancienne route s'efface en 200 ms, puis reprise à l'étape c.
         segs.forEach(function (s) { var el = s.getElement(); if (el) { el.style.transition = 'opacity ' + FADE_OUT_MS + 'ms'; el.style.opacity = 0; } });
@@ -273,8 +282,9 @@
         hideTrail();
         pill.classList.remove('on');
         setState('fadeout');
-        setTimeout(function () { play(my, bounds); }, FADE_OUT_MS);
+        setTimeout(function () { if (my === token) { prepare(); play(my, bounds); } }, FADE_OUT_MS);
       } else {
+        prepare();
         play(my, bounds);
       }
     },

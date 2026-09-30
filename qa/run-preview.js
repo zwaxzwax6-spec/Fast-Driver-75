@@ -697,9 +697,10 @@ function proxy(port, target, withToken) {
         });
         await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
         await pickAddress(p, '#f-dep', '160 rue de Rivoli', /75001/);
+        // La carte doit être à l'écran dès son ouverture (sinon l'animation attend, à raison).
+        await p.evaluate(() => document.getElementById('f-bag-wrap').scrollIntoView({ block: 'start' }));
         await pickAddress(p, '#f-arr', 'CDG T2E', /Terminal 2E[\s\S]*Dépose/);
         await p.waitForSelector('#route-map.open', { timeout: 20000 });
-        await p.locator('#route-map').scrollIntoViewIfNeeded();
         const z0 = await p.waitForFunction(() => window.FDMap && window.FDMap.view() && document.getElementById('route-map-in').dataset.anim === 'draw' && window.FDMap.view(), null, { timeout: 15000 }).then(h => h.jsonValue());
         await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 15000 });
         const z1 = await p.evaluate(() => window.FDMap.view());
@@ -715,18 +716,36 @@ function proxy(port, target, withToken) {
         out[w] = { inOrder, drawMs, countMs, zoomOut: z0.zoom > z1.zoom, seq: order };
       }
 
-      // FPS pendant la boucle (sans enregistrement vidéo) + pause hors écran + capture zoomée de la moto.
+      // FPS pendant la boucle, dans les 2 configurations réelles (iPhone 390 dpr 3, bureau 1440 dpr 1),
+      // sans enregistrement vidéo, carte centrée à l'écran, après 500 ms de stabilisation.
+      const FPS_JS = () => new Promise(ok => {
+        const ts = []; const t0 = performance.now();
+        (function f(now) { ts.push(now); if (now - t0 < 3000) requestAnimationFrame(f); else ok({ avg: (ts.length - 1) / ((ts[ts.length - 1] - ts[0]) / 1000), worst: Math.max(...ts.slice(1).map((t, i) => t - ts[i])) }); })(t0);
+      });
+      const fpsBy = {};
+      for (const kind of ['mobile', 1440]) {
+        const q = await newPage(browser, kind);
+        await q.goto(BASE + '/#reserver', { waitUntil: 'load' });
+        await pickAddress(q, '#f-dep', '160 rue de Rivoli', /75001/);
+        await pickAddress(q, '#f-arr', 'Orly 4', /Orly 4[\s\S]*Dépose/);
+        await q.waitForSelector('#route-map.open', { timeout: 20000 });
+        await q.evaluate(() => document.getElementById('route-map').scrollIntoView({ block: 'center' }));
+        await q.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 20000 });
+        await sleep(500);
+        fpsBy[kind === 'mobile' ? 390 : 1440] = await q.evaluate(FPS_JS);
+        await q.context().close();
+      }
+      const fps = { avg: Math.min(fpsBy[390].avg, fpsBy[1440].avg), worst: Math.max(fpsBy[390].worst, fpsBy[1440].worst) };
+
+      // Capture zoomée de la moto (dpr 3) + pause hors écran.
       const p = await newPage(browser, 1440, { deviceScaleFactor: 3 });
       await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
       await pickAddress(p, '#f-dep', '160 rue de Rivoli', /75001/);
       await pickAddress(p, '#f-arr', 'Orly 4', /Orly 4[\s\S]*Dépose/);
-      await p.locator('#route-map').scrollIntoViewIfNeeded();
+      await p.waitForSelector('#route-map.open', { timeout: 20000 });
+      await p.evaluate(() => document.getElementById('route-map').scrollIntoView({ block: 'center' }));
       await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 20000 });
       await sleep(300);
-      const fps = await p.evaluate(() => new Promise(ok => {
-        const ts = []; const t0 = performance.now();
-        (function f(now) { ts.push(now); if (now - t0 < 3000) requestAnimationFrame(f); else ok({ n: ts.length, avg: (ts.length - 1) / ((ts[ts.length - 1] - ts[0]) / 1000), worst: Math.max(...ts.slice(1).map((t, i) => t - ts[i])) }); })(t0);
-      }));
       const moto = p.locator('.fd-moto-in');
       await p.waitForFunction(() => +getComputedStyle(document.querySelector('.fd-moto')).opacity > 0.9, null, { timeout: 6000 });
       // La moto bouge : on capture la carte (immobile) et on découpe autour de la moto mesurée au même instant.
@@ -757,7 +776,7 @@ function proxy(port, target, withToken) {
       const motoOk = motoInfo.w === 28 && motoInfo.h === 28 && motoInfo.bg === 'rgb(20, 20, 20)' && motoInfo.color === 'rgb(255, 255, 255)' && motoInfo.tabler;
       const seqOk = [390, 1440].every(w => out[w].inOrder && out[w].zoomOut && Math.abs(out[w].drawMs - 1400) < 250 && Math.abs(out[w].countMs - 600) < 200);
       record('C20', motoOk && seqOk && fps.avg >= 55 && paused,
-        `moto : pastille ${motoInfo.w}×${motoInfo.h} px noire, icône Tabler « motorbike » blanche: ${motoInfo.tabler ? 'oui' : 'non'} (C20-moto-zoom.png) · séquence a→e dans l'ordre : 390 ${out[390].inOrder ? 'oui' : 'NON'} / 1440 ${out[1440].inOrder ? 'oui' : 'NON'}, tracé ${out[390].drawMs}/${out[1440].drawMs} ms, compteur ${out[390].countMs}/${out[1440].countMs} ms, caméra qui recule (zoom ${out[1440].zoomOut ? 'oui' : 'non'}) · boucle : ${fps.avg.toFixed(1)} images/s (pire intervalle ${fps.worst.toFixed(1)} ms) · hors écran : ${off1.run}, moto figée: ${off1.t === off2.t ? 'oui' : 'non'}, reprise: ${back}`,
+        `moto : pastille ${motoInfo.w}×${motoInfo.h} px noire, icône Tabler « motorbike » blanche: ${motoInfo.tabler ? 'oui' : 'non'} (C20-moto-zoom.png) · séquence a→e dans l'ordre : 390 ${out[390].inOrder ? 'oui' : 'NON'} / 1440 ${out[1440].inOrder ? 'oui' : 'NON'}, tracé ${out[390].drawMs}/${out[1440].drawMs} ms, compteur ${out[390].countMs}/${out[1440].countMs} ms, caméra qui recule (zoom ${out[1440].zoomOut ? 'oui' : 'non'}) · boucle : ${fpsBy[390].avg.toFixed(1)} images/s en 390 et ${fpsBy[1440].avg.toFixed(1)} en 1440 (pire intervalle ${fps.worst.toFixed(1)} ms, Chromium headless sans GPU) · hors écran : ${off1.run}, moto figée: ${off1.t === off2.t ? 'oui' : 'non'}, reprise: ${back}`,
         'vidéos : C20-video-sequence-390.webm, C20-video-sequence-1440.webm');
     }
 
