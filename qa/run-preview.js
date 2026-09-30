@@ -127,11 +127,13 @@ async function newPage(browser, kind, extra = {}) {
   return page;
 }
 
-async function pickAddress(page, sel, query, matchRe) {
+async function pickAddress(page, sel, query, matchRe, kind) {
   await page.fill(sel, '');
   await page.type(sel, query, { delay: 15 });
   await page.waitForSelector(`${sel}-list .ac-item`, { timeout: 12000 });
-  const items = page.locator(`${sel}-list .ac-item`);
+  // Les suggestions API arrivent après les destinations pré-réglées : on attend la liste complète.
+  if (kind === 'api') await page.waitForSelector(`${sel}-list .ac-item:not(.ac-preset)`, { timeout: 12000 });
+  const items = page.locator(`${sel}-list .ac-item${kind === 'api' ? ':not(.ac-preset)' : ''}`);
   const n = await items.count();
   for (let i = 0; i < n; i++) {
     if (!matchRe || matchRe.test(await items.nth(i).innerText())) { await items.nth(i).click(); return; }
@@ -143,6 +145,20 @@ const ROUTES = {
   orly: [['160 rue de Rivoli', /75001/], ['Aeroport d\'Orly', /94310|94390/]],
   versailles: [['Place d\'Armes Versailles', /78000/], ['Rue de la Légion d\'Honneur Saint-Denis', /93200/]]
 };
+/* Recette C19 : [nom, départ, arrivée] ; chaque point = [saisie, motif de la suggestion à choisir]. */
+const RIVOLI = ['160 rue de Rivoli', /75001/];
+const TRIPS = [
+  ['Rivoli → « Aéroport Charles de Gaulle » (1re suggestion API Adresse)', RIVOLI, ['Aéroport Charles de Gaulle', /Charles de Gaulle\s*\n?\s*9\d{4}/, 'api']],
+  ['Paris → CDG T1', RIVOLI, ['CDG T1', /Terminal 1\b[\s\S]*Dépose/]],
+  ['Paris → CDG T2E', RIVOLI, ['CDG T2E', /Terminal 2E[\s\S]*Dépose/]],
+  ['Paris → Orly 4', RIVOLI, ['Orly 4', /Orly 4[\s\S]*Dépose/]],
+  ['Gare du Nord → Gare de Lyon', ['Gare du Nord', /Gare du Nord[\s\S]*Dépose/], ['Gare de Lyon', /Gare de Lyon[\s\S]*Dépose/]],
+  ['Montparnasse → La Défense', ['Montparnasse', /Montparnasse[\s\S]*Dépose/], ['La Défense', /La Défense[\s\S]*Dépose/]],
+  ['Paris → Marne-la-Vallée Chessy', RIVOLI, ['Chessy', /Chessy[\s\S]*Dépose/]],
+  ['Versailles → Saint-Denis', ['Place d\'Armes Versailles', /78000/], ['Rue de la Légion d\'Honneur Saint-Denis', /93200/]],
+  ['CDG T2E → Paris (sens inverse)', ['CDG T2E', /Terminal 2E[\s\S]*Dépose/], RIVOLI],
+  ['Paris → Beauvais (hors zone attendu)', RIVOLI, ['Beauvais', null, 'outside']]
+];
 async function route(page, name) {
   const [a, b] = ROUTES[name];
   await pickAddress(page, '#f-dep', a[0], a[1]);
@@ -158,24 +174,24 @@ const clientMail = tag => `delivered+${RUN.toLowerCase()}-${tag}@resend.dev`;
 
 const MAP_PROBE = () => {
   const root = document.getElementById('route-map-in');
-  const line = root.querySelector('path.fd-line');
-  const pins = [...root.querySelectorAll('.fd-pin')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r }; });
+  const segs = [...root.querySelectorAll('path.fd-seg')];
+  const pins = [...root.querySelectorAll('.fd-pin .dot')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r }; });
   const box = root.getBoundingClientRect();
-  const ctm = line.getScreenCTM();
-  const len = line.getTotalLength();
-  const toScreen = p => ({ x: ctm.a * p.x + ctm.c * p.y + ctm.e, y: ctm.b * p.x + ctm.d * p.y + ctm.f });
-  const start = toScreen(line.getPointAtLength(0)), end = toScreen(line.getPointAtLength(len));
+  const toScreen = (path, p) => { const m = path.getScreenCTM(); return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f }; };
+  const first = segs[0], last = segs[segs.length - 1];
+  const start = toScreen(first, first.getPointAtLength(0)), end = toScreen(last, last.getPointAtLength(last.getTotalLength()));
   const samples = [];
-  for (let d = 0; d <= len; d += 0.5) samples.push(toScreen(line.getPointAtLength(d)));
-  const mt = root.querySelector('.fd-moto .mt');
+  segs.forEach(sg => { const L = sg.getTotalLength(); for (let d = 0; d <= L; d += 0.5) samples.push(toScreen(sg, sg.getPointAtLength(d))); });
+  const mt = root.querySelector('.fd-moto-in');
   let moto = null;
-  if (mt) { const r = mt.getBoundingClientRect(); moto = { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+  if (mt && +getComputedStyle(mt.parentNode).opacity > 0.5) { const r = mt.getBoundingClientRect(); moto = { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   return {
     startToGreen: dist(start, pins[0]), endToRed: dist(end, pins[1]),
     pinsInside: pins.every(p => p.r.left >= box.left && p.r.right <= box.right && p.r.top >= box.top && p.r.bottom <= box.bottom),
-    motoOffset: moto ? Math.min(...samples.map(s => dist(s, moto))) : null, moto, dash: line.style.strokeDasharray,
-    d: line.getAttribute('d')
+    motoOffset: moto ? Math.min(...samples.map(s => dist(s, moto))) : null, moto,
+    segs: segs.length, opacities: segs.map(e => +e.style.opacity), anim: root.dataset.anim, run: root.dataset.run,
+    d: first.getAttribute('d')
   };
 };
 
@@ -184,12 +200,15 @@ async function mapRun(browser, kind, routeName, tag, video) {
   const p = await newPage(browser, kind, extra);
   await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
   await route(p, routeName);
-  await p.waitForSelector('#route-map.open path.fd-line', { timeout: 20000 });
+  await p.waitForSelector('#route-map.open path.fd-seg', { timeout: 20000 });
   await p.locator('#resa-card').scrollIntoViewIfNeeded();
-  await sleep(1500);
+  await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 15000 });
+  await sleep(700);
   const probes = [];
   for (let i = 0; i < 5; i++) {
-    probes.push(await p.evaluate(MAP_PROBE));
+    let pr = await p.evaluate(MAP_PROBE);
+    for (let k = 0; k < 20 && !pr.moto; k++) { await sleep(100); pr = await p.evaluate(MAP_PROBE); }
+    probes.push(pr);
     await p.locator('#route-map').screenshot({ path: shot(`C17-${tag}-${i + 1}.png`) });
     await sleep(650);
   }
@@ -385,7 +404,7 @@ function proxy(port, target, withToken) {
 
       await p.fill('#c-email', clientMail('course')); await p.fill('#c-tel', '06 12 34 56 78');
       await p.fill('#c-com', 'Casque taille M, merci ' + RUN);
-      await p.waitForSelector('#route-map.open path.fd-line', { timeout: 20000 });
+      await p.waitForSelector('#route-map.open path.fd-seg', { timeout: 20000 });
       await p.locator('#route-map').scrollIntoViewIfNeeded();
       await sleep(2500);
       const leafletAfter = reqs.filter(u => /leaflet/.test(u)).length;
@@ -437,13 +456,12 @@ function proxy(port, target, withToken) {
       const q = await newPage(browser, 1440);
       await q.goto(BASE + '/#reserver', { waitUntil: 'load' });
       await route(q, 'orly');
-      await q.waitForSelector('#route-map.open path.fd-line', { timeout: 20000 });
-      await sleep(2000);
-      const a = await q.evaluate(() => ({ id: document.getElementById('route-map-in')._leaflet_id, d: document.querySelector('path.fd-line').getAttribute('d') }));
+      await q.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 20000 });
+      const a = await q.evaluate(() => ({ id: document.getElementById('route-map-in')._leaflet_id, d: document.querySelector('path.fd-seg').getAttribute('d') }));
       await route(q, 'versailles');
-      await q.waitForFunction(prev => { const p = document.querySelector('#route-map.open:not(.stale) path.fd-line'); return p && p.getAttribute('d') !== prev; }, a.d, { timeout: 20000 });
-      await sleep(250);
-      const mid = await q.evaluate(() => ({ dash: document.querySelector('path.fd-line').style.strokeDasharray, off: parseFloat(getComputedStyle(document.querySelector('path.fd-line')).strokeDashoffset) }));
+      await q.waitForFunction(prev => { const r = document.getElementById('route-map-in'); const p = r.querySelector('#route-map.open:not(.stale) path.fd-seg'); return r.dataset.anim === 'draw' && p && p.getAttribute('d') !== prev; }, a.d, { timeout: 20000 });
+      await sleep(500);
+      const mid = await q.evaluate(() => { const o = [...document.querySelectorAll('path.fd-seg')].map(e => +e.style.opacity); return { partial: o.some(x => x < 1) && o.some(x => x > 0), shown: o.filter(x => x >= 1).length, n: o.length }; });
       await q.locator('#route-map').screenshot({ path: shot('C18-retrace-en-cours-1440.png') });
       await sleep(1500);
       const b = await q.evaluate(() => ({ id: document.getElementById('route-map-in')._leaflet_id, n: document.querySelectorAll('#route-map-in .leaflet-map-pane').length }));
@@ -453,15 +471,15 @@ function proxy(port, target, withToken) {
       const r = await newPage(browser, 'mobile', { reducedMotion: 'reduce' });
       await r.goto(BASE + '/#reserver', { waitUntil: 'load' });
       await route(r, 'versailles');
-      await r.waitForSelector('#route-map.open path.fd-line', { timeout: 20000 });
-      await sleep(300);
+      await r.waitForSelector('#route-map.open path.fd-seg', { timeout: 20000 });
+      await sleep(400);
       const s1 = await r.evaluate(MAP_PROBE);
       await sleep(1200);
       const s2 = await r.evaluate(MAP_PROBE);
       await r.locator('#route-map').screenshot({ path: shot('C18-reduced-motion-390.png') });
       await r.context().close();
       const still = Math.hypot(s1.moto.x - s2.moto.x, s1.moto.y - s2.moto.y);
-      const staticOk = (s1.dash === '' || s1.dash === 'none') && still < 0.5 && s1.motoOffset <= 3;
+      const staticOk = s1.anim === 'static' && s1.opacities.every(o => o === 1) && still < 0.5 && s1.motoOffset <= 3;
 
       const t = await newPage(browser, 'mobile');
       await t.route('**/tile.openstreetmap.org/**', rt => rt.abort());
@@ -474,8 +492,8 @@ function proxy(port, target, withToken) {
       await t.locator('#resa-card').screenshot({ path: shot('C18-tuiles-erreur-390.png') });
       await t.context().close();
 
-      record('C18', !mapOpen && /indisponible/.test(alertTxt) && formOk && /à confirmer|€/.test(doneTxt) && a.id === b.id && b.n === 1 && mid.dash !== 'none' && mid.off > 0 && staticOk && !tileMapOpen && tilePrice,
-        `ORS en erreur → carte ${mapOpen ? 'affichée' : 'absente'}, message affiché, demande envoyée: ${formOk ? 'oui' : 'non'} · Paris → Orly puis Versailles → Saint-Denis : même carte (id ${a.id}→${b.id}, ${b.n} carte), retracé animé (reste ${mid.off.toFixed(0)} px à 250 ms) · reduced-motion (Versailles → Saint-Denis) : statique, moto immobile (${still.toFixed(2)} px) · tuiles en erreur → carte masquée: ${tileMapOpen ? 'non' : 'oui'}, prix: ${tilePrice ? 'oui' : 'non'}`);
+      record('C18', !mapOpen && /indisponible/.test(alertTxt) && formOk && /à confirmer|€/.test(doneTxt) && a.id === b.id && b.n === 1 && mid.partial && staticOk && !tileMapOpen && tilePrice,
+        `ORS en erreur → carte ${mapOpen ? 'affichée' : 'absente'}, message affiché, demande envoyée: ${formOk ? 'oui' : 'non'} · Paris → Orly puis Versailles → Saint-Denis : même carte (id ${a.id}→${b.id}, ${b.n} carte), retracé animé (${mid.shown}/${mid.n} segments révélés à 500 ms) · reduced-motion (Versailles → Saint-Denis) : statique, moto immobile (${still.toFixed(2)} px) · tuiles en erreur → carte masquée: ${tileMapOpen ? 'non' : 'oui'}, prix: ${tilePrice ? 'oui' : 'non'}`);
     }
 
     /* ================= Colis, Plusieurs véhicules, Candidature (UI réelle) ================= */
@@ -571,7 +589,7 @@ function proxy(port, target, withToken) {
         if (u === '/') {
           await p.goto(BASE + '/#reserver');
           await route(p, 'versailles');
-          await p.waitForSelector('#route-map.open path.fd-line', { timeout: 20000 });
+          await p.waitForSelector('#route-map.open path.fd-seg', { timeout: 20000 });
           await sleep(2500);
         }
         rows.push(`${kind === 'mobile' ? 390 : kind} ${u}: ${p.errors.length}`);
@@ -604,6 +622,135 @@ function proxy(port, target, withToken) {
       const net = results._net;
       record('C16', after.median >= before.median - 5 && net.leafletBefore === 0 && net.leafletAfter > 0,
         `Lighthouse mobile perf (médiane de 3, même chemin réseau) — avant (site en ligne): ${before.median} [${before.scores}] · après (preview): ${after.median} [${after.scores}] · écart ${after.median - before.median} pts · Leaflet/tuiles avant 1er calcul: ${net.leafletBefore}, après: ${net.leafletAfter}`);
+    }
+
+
+    /* ================= C19 : trajets aéroports / gares / grands sites (Course + Colis, 390 + 1440) ================= */
+    {
+      const rows = []; let ok = true;
+      results._trips = [];
+      for (const mode of ['course', 'colis']) for (const kind of ['mobile', 1440]) {
+        const w = kind === 'mobile' ? 390 : 1440;
+        const p = await newPage(browser, kind);
+        for (let ti = 0; ti < TRIPS.length; ti++) {
+          const [name, dep, arr] = TRIPS[ti];
+          const tag = `C19-${mode}-${w}-${String(ti + 1).padStart(2, '0')}`;
+          let res = { name, mode, w, ok: false };
+          try {
+            await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
+            if (mode === 'colis') await p.click('.tab[data-mode=colis]');
+            await pickAddress(p, '#f-dep', dep[0], dep[1], dep[2]);
+            if (arr[2] === 'outside') {
+              await p.fill('#f-arr', '');
+              await p.type('#f-arr', arr[0], { delay: 15 });
+              await p.waitForFunction(() => document.querySelector('#f-arr-err').textContent.length > 0, null, { timeout: 10000 }).catch(() => { });
+              const msg = await p.innerText('#f-arr-err');
+              const noQuote = await p.evaluate(() => document.getElementById('q-box').hidden);
+              res = { ...res, ok: msg === 'Adresse hors Île-de-France' && noQuote, km: '—', price: '—', note: msg };
+              await p.locator('#resa-card').screenshot({ path: shot(tag + '.png') });
+            } else {
+              await pickAddress(p, '#f-arr', arr[0], arr[1], arr[2]);
+              await p.waitForSelector('#q-box:not([hidden])', { timeout: 20000 });
+              await p.waitForSelector('#route-map.open path.fd-seg', { timeout: 20000 });
+              await p.locator('#route-map').scrollIntoViewIfNeeded();
+              await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 15000 });
+              await sleep(300);
+              const km = (await p.innerText('#route-meta')).replace(/\s+/g, ' ').trim();
+              const price = await p.innerText('#q-total');
+              const alert = await p.evaluate(() => !document.getElementById('q-alert').hidden);
+              const labels = [await p.inputValue('#f-dep'), await p.inputValue('#f-arr')];
+              res = { ...res, ok: !alert && /€/.test(price) && !/^0,00/.test(price), km, price, labels };
+              await p.locator('#resa-card').screenshot({ path: shot(tag + '.png') });
+            }
+          } catch (e) { res.note = String(e.message || e).slice(0, 120); }
+          if (!res.ok) ok = false;
+          results._trips.push(res);
+          console.log(`  ${res.ok ? 'ok' : 'KO'} ${mode} ${w} ${name} — ${res.km || ''} ${res.price || ''} ${res.note || ''}`);
+          await sleep(1500); // ménage le quota ORS et la limite /api
+        }
+        await p.context().close();
+      }
+      const n = results._trips.length, good = results._trips.filter(t => t.ok).length;
+      const c = results._trips.filter(t => t.mode === 'course' && t.w === 1440);
+      record('C19', ok, `${good}/${n} trajets conformes (10 trajets × Course/Colis × 390/1440) · ` +
+        c.map(t => `${t.name.replace(/ \(.*\)/, '')} : ${t.price === '—' ? t.note : t.km.replace(' · environ', ',') + ', ' + t.price}`).join(' · '));
+    }
+
+    /* ================= C20 : animation (moto, séquence a→e, fps, pause hors écran) ================= */
+    {
+      const out = {};
+      for (const kind of ['mobile', 1440]) {
+        const w = kind === 'mobile' ? 390 : 1440;
+        const p = await newPage(browser, kind, { recordVideo: { dir: OUT, size: kind === 'mobile' ? { width: 390, height: 844 } : { width: 1440, height: 900 } } });
+        await p.addInitScript(() => {
+          window.__seq = [];
+          const t0 = performance.now(), log = (k) => window.__seq.push([k, Math.round(performance.now() - t0)]);
+          new MutationObserver(ms => ms.forEach(m => {
+            const el = m.target;
+            if (m.attributeName === 'data-anim') log('anim:' + el.dataset.anim);
+            if (m.attributeName === 'class') {
+              if (el.classList.contains('rm-in') && el.classList.contains('rm-shown') && !window.__shown) { window.__shown = 1; log('a:fondu'); }
+              if (el.classList.contains('fd-pin') && el.classList.contains('on')) log(el.querySelector('.dot.g') ? 'b:depart' : 'd:arrivee');
+              if (el.classList.contains('fd-pill') && el.classList.contains('on')) log('e:pastille');
+            }
+          })).observe(document, { subtree: true, attributes: true, attributeFilter: ['class', 'data-anim'] });
+        });
+        await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
+        await pickAddress(p, '#f-dep', '160 rue de Rivoli', /75001/);
+        await pickAddress(p, '#f-arr', 'CDG T2E', /Terminal 2E[\s\S]*Dépose/);
+        await p.waitForSelector('#route-map.open', { timeout: 20000 });
+        await p.locator('#route-map').scrollIntoViewIfNeeded();
+        const z0 = await p.waitForFunction(() => window.FDMap && window.FDMap.view() && document.getElementById('route-map-in').dataset.anim === 'draw' && window.FDMap.view(), null, { timeout: 15000 }).then(h => h.jsonValue());
+        await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 15000 });
+        const z1 = await p.evaluate(() => window.FDMap.view());
+        await sleep(4700 * 1.2);
+        const seq = await p.evaluate(() => window.__seq);
+        await p.close();
+        fs.renameSync(await p.video().path(), shot(`C20-video-sequence-${w}.webm`));
+        await p.context().close();
+        const at = k => (seq.find(e => e[0] === k) || [])[1];
+        const order = ['a:fondu', 'b:depart', 'anim:draw', 'd:arrivee', 'e:pastille', 'anim:count', 'anim:loop'].map(at);
+        const inOrder = order.every(v => v != null) && order.every((v, i) => i === 0 || v >= order[i - 1]);
+        const drawMs = at('d:arrivee') - at('anim:draw'), countMs = at('anim:loop') - at('anim:count');
+        out[w] = { inOrder, drawMs, countMs, zoomOut: z0.zoom > z1.zoom, seq: order };
+      }
+
+      // FPS pendant la boucle (sans enregistrement vidéo) + pause hors écran + capture zoomée de la moto.
+      const p = await newPage(browser, 1440, { deviceScaleFactor: 3 });
+      await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
+      await pickAddress(p, '#f-dep', '160 rue de Rivoli', /75001/);
+      await pickAddress(p, '#f-arr', 'Orly 4', /Orly 4[\s\S]*Dépose/);
+      await p.locator('#route-map').scrollIntoViewIfNeeded();
+      await p.waitForFunction(() => document.getElementById('route-map-in').dataset.anim === 'loop', null, { timeout: 20000 });
+      await sleep(300);
+      const fps = await p.evaluate(() => new Promise(ok => {
+        const ts = []; const t0 = performance.now();
+        (function f(now) { ts.push(now); if (now - t0 < 3000) requestAnimationFrame(f); else ok({ n: ts.length, avg: (ts.length - 1) / ((ts[ts.length - 1] - ts[0]) / 1000), worst: Math.max(...ts.slice(1).map((t, i) => t - ts[i])) }); })(t0);
+      }));
+      const moto = p.locator('.fd-moto-in');
+      await p.waitForFunction(() => +getComputedStyle(document.querySelector('.fd-moto')).opacity > 0.9, null, { timeout: 6000 });
+      const mb = await moto.boundingBox();
+      await p.screenshot({ path: shot('C20-moto-zoom.png'), clip: { x: mb.x - 10, y: mb.y - 10, width: mb.width + 20, height: mb.height + 20 } });
+      const motoInfo = await p.evaluate(() => {
+        const e = document.querySelector('.fd-moto-in'), cs = getComputedStyle(e);
+        return { w: e.offsetWidth, h: e.offsetHeight, bg: cs.backgroundColor, color: cs.color, radius: cs.borderRadius, tabler: e.innerHTML.includes('M7.5 14h5l4 -4h-10.5m1.5 4l4 -4') && e.innerHTML.includes('M13 6h2l1.5 3l2 4') };
+      });
+      // hors écran → pause
+      await p.evaluate(() => window.scrollTo(0, 0));
+      await sleep(600);
+      const off1 = await p.evaluate(() => ({ run: document.getElementById('route-map-in').dataset.run, t: document.querySelector('.fd-moto').style.transform }));
+      await sleep(1200);
+      const off2 = await p.evaluate(() => ({ run: document.getElementById('route-map-in').dataset.run, t: document.querySelector('.fd-moto').style.transform }));
+      await p.locator('#route-map').scrollIntoViewIfNeeded();
+      await sleep(900);
+      const back = await p.evaluate(() => document.getElementById('route-map-in').dataset.run);
+      await p.context().close();
+      const paused = off1.run === 'paused' && off1.t === off2.t && back === 'running';
+      const motoOk = motoInfo.w === 28 && motoInfo.h === 28 && motoInfo.bg === 'rgb(20, 20, 20)' && motoInfo.color === 'rgb(255, 255, 255)' && motoInfo.tabler;
+      const seqOk = [390, 1440].every(w => out[w].inOrder && out[w].zoomOut && Math.abs(out[w].drawMs - 1400) < 250 && Math.abs(out[w].countMs - 600) < 200);
+      record('C20', motoOk && seqOk && fps.avg >= 55 && paused,
+        `moto : pastille ${motoInfo.w}×${motoInfo.h} px noire, icône Tabler « motorbike » blanche: ${motoInfo.tabler ? 'oui' : 'non'} (C20-moto-zoom.png) · séquence a→e dans l'ordre : 390 ${out[390].inOrder ? 'oui' : 'NON'} / 1440 ${out[1440].inOrder ? 'oui' : 'NON'}, tracé ${out[390].drawMs}/${out[1440].drawMs} ms, compteur ${out[390].countMs}/${out[1440].countMs} ms, caméra qui recule (zoom ${out[1440].zoomOut ? 'oui' : 'non'}) · boucle : ${fps.avg.toFixed(1)} images/s (pire intervalle ${fps.worst.toFixed(1)} ms) · hors écran : ${off1.run}, moto figée: ${off1.t === off2.t ? 'oui' : 'non'}, reprise: ${back}`,
+        'vidéos : C20-video-sequence-390.webm, C20-video-sequence-1440.webm');
     }
 
     /* ================= Vérifications e-mails (Resend réel) ================= */
@@ -666,13 +813,15 @@ function proxy(port, target, withToken) {
     await browser.close();
   }
 
-  const ORDER = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18'];
+  const ORDER = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20'];
   const ok = ORDER.filter(k => results[k] && results[k].pass).length;
-  const note = Math.round(ok / 18 * 100) / 10;
-  const md2 = [`# QA phase B (preview, sans mock) — itération ${ITER}`, '', `Preview : ${BASE}`, `Marqueur de passage : ${RUN}`, '', `**${ok}/18 critères · note ${String(note).replace('.', ',')}/10**`, '',
+  const note = Math.round(ok / ORDER.length * 100) / 10;
+  const md2 = [`# QA phase B (preview, sans mock) — itération ${ITER}`, '', `Preview : ${BASE}`, `Marqueur de passage : ${RUN}`, '', `**${ok}/${ORDER.length} critères · note ${String(note).replace('.', ',')}/10**`, '',
     '| # | ✓ | Valeur mesurée |', '|---|---|---|',
     ...ORDER.map(k => `| ${k} | ${results[k] ? (results[k].pass ? '✅' : '❌') : '⚠️ non mesuré'} | ${results[k] ? (results[k].value + (results[k].detail ? ' — ' + results[k].detail : '')).replace(/\|/g, '/') : ''} |`),
+    '', '## Trajets testés (C19)', '', '| Mode | Largeur | Trajet | Distance · durée | Prix | ✓ |', '|---|---|---|---|---|---|',
+    ...(results._trips || []).map(t => `| ${t.mode} | ${t.w} | ${t.name} | ${t.km || '—'} | ${t.price || t.note || '—'} | ${t.ok ? '✅' : '❌'} |`),
     results._crash ? '\n**Crash :** ' + results._crash : ''].join('\n');
   fs.writeFileSync(path.join(OUT, 'report.md'), md2);
-  console.log(`\n${ok}/18 — note ${note}/10 → ${path.join(OUT, 'report.md')}`);
+  console.log(`\n${ok}/${ORDER.length} — note ${note}/10 → ${path.join(OUT, 'report.md')}`);
 })();

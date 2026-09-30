@@ -370,3 +370,42 @@ test('ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization
     assert.equal(seen[0].auth, 'test-key');
   } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
 });
+
+test('ORS : radiuses [-1,-1] envoyé, une seule nouvelle tentative, puis erreur propre', async () => {
+  const realFetch = global.fetch;
+  const bodies = [];
+  let fails = 1;
+  const okResp = { ok: true, json: async () => ({ features: [{ geometry: { coordinates: [[2.4, 48.9], [2.41, 48.91]] }, properties: { summary: { distance: 2500, duration: 400 } } }] }) };
+  global.fetch = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    if (fails-- > 0) return { ok: false, status: 404, text: async () => '' };
+    return okResp;
+  };
+  process.env.VERCEL_ENV = 'preview';
+  process.env.ORS_API_KEY = 'test-key';
+  try {
+    let r = await call(quote, { mode: 'course', from: { lon: 2.401, lat: 48.901 }, to: { lon: 2.539607, lat: 48.997627 } });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(bodies.length, 2, 'une nouvelle tentative après l’échec');
+    assert.deepEqual(bodies[0].radiuses, [-1, -1]);
+    assert.deepEqual(bodies[1].radiuses, [-1, -1]);
+    // deux échecs de suite : 503 propre, sans prix
+    bodies.length = 0; fails = 2;
+    r = await call(quote, { mode: 'course', from: { lon: 2.402, lat: 48.902 }, to: { lon: 2.55186, lat: 49.014964 } });
+    assert.equal(r.status, 503);
+    assert.equal(r.json.price, undefined);
+    assert.equal(bodies.length, 2);
+  } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
+});
+
+test('destination pré-réglée : coordonnées OSM utilisées, aucun géocodage', async () => {
+  const Places = require(path.join(ROOT, 'assets/places.js'));
+  const t2e = Places.PLACES.find(p => p.id === 'cdg-t2e');
+  const before = geoCalls;
+  clearMails();
+  const r = await call(booking, { ...base(), to: t2e.label });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(geoCalls - before, 1, 'seul le départ est géocodé');
+  assert.equal(r.json.to, t2e.label);
+  assert.ok(mails()[0].text.includes('Aéroport CDG – Terminal 2E'));
+});

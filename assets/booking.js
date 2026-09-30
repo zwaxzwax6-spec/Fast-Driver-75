@@ -137,7 +137,7 @@
       el.wait.hidden = true;
       if (r.status === 200 && r.json.ok) {
         state.route = { km: r.json.distanceKm, min: r.json.durationMin, geometry: r.json.geometry };
-        renderPrice();
+        renderPrice({ reveal: true });
         showMap(state.route.geometry);
       } else {
         state.route = null;
@@ -150,7 +150,22 @@
     });
   }
 
-  function renderPrice() {
+  /* Compteur du prix : défile de la valeur affichée vers la nouvelle. */
+  var shown = 0, countRaf = 0, revealTimer = 0;
+  function countTo(target, ms) {
+    cancelAnimationFrame(countRaf);
+    var from = shown, start = performance.now();
+    if (!ms) { shown = target; el.total.textContent = P.fmtEur(target); return; }
+    (function step(now) {
+      var t = Math.min(1, (now - start) / ms), k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      shown = Math.round((from + (target - from) * k) * 100) / 100;
+      el.total.textContent = P.fmtEur(shown);
+      if (t < 1) countRaf = requestAnimationFrame(step);
+    })(start);
+  }
+
+  /* opts.reveal : nouvel itinéraire → le total part de 0 et défile quand la carte affiche sa pastille. */
+  function renderPrice(opts) {
     var r = state.route;
     if (!r || state.mode === 'flotte') {
       el.box.hidden = el.note.hidden = el.meta.hidden = true;
@@ -161,7 +176,14 @@
     el.lines.innerHTML = price.lines.map(function (l) {
       return '<div class="q-line"><span>' + FD.esc(l.label) + '</span><b>' + P.fmtEur(l.amount) + '</b></div>';
     }).join('');
-    el.total.textContent = P.fmtEur(price.total);
+    state.total = price.total;
+    if (opts && opts.reveal) {
+      countTo(0, 0);
+      clearTimeout(revealTimer);
+      revealTimer = setTimeout(function () { countTo(state.total, 600); }, 2600); // si la carte ne s'affiche pas
+    } else {
+      countTo(price.total, shown ? 400 : 0);
+    }
     el.meta.querySelector('span').textContent = P.fmtKm(r.km) + ' km · environ ' + r.min + ' min';
     el.quote.hidden = false;
     el.box.hidden = el.note.hidden = el.meta.hidden = false;
@@ -201,7 +223,12 @@
       if (my !== state.seq || calc.hidden) return; // jamais d'initialisation dans un onglet masqué
       el.map.classList.remove('stale');
       el.map.classList.add('open');
-      FDMap.show(el.mapIn, geometry, { onFail: closeMap });
+      FDMap.show(el.mapIn, geometry, {
+        km: state.route ? state.route.km : 0,
+        min: state.route ? state.route.min : 0,
+        onFail: closeMap,
+        onReveal: function (ms) { clearTimeout(revealTimer); if (state.route) countTo(state.total, ms); }
+      });
     }).catch(closeMap);
   }
   function closeMap() {

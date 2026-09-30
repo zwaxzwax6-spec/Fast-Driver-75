@@ -126,18 +126,26 @@
       input.removeAttribute('aria-activedescendant');
       active = -1;
     }
-    function render(features, outside) {
-      items = features;
+    /* Élément de liste unifié : { label, main, sub, postcode, lon, lat, preset } */
+    function fromApi(f) {
+      var p = f.properties;
+      return { label: p.label, main: p.type === 'municipality' ? p.city : p.name, sub: p.postcode + ' ' + p.city,
+        postcode: p.postcode, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] };
+    }
+    function fromPreset(p) {
+      return { label: p.label, main: p.name, sub: 'Dépose-minute · ' + p.postcode + ' ' + p.city,
+        postcode: p.postcode, lon: p.lon, lat: p.lat, preset: p.id };
+    }
+    function render(list_) {
+      items = list_;
       list.innerHTML = '';
-      if (!features.length) { close(); return; }
-      features.forEach(function (f, i) {
+      if (!list_.length) { close(); return; }
+      list_.forEach(function (it, i) {
         var li = document.createElement('li');
-        li.className = 'ac-item';
+        li.className = 'ac-item' + (it.preset ? ' ac-preset' : '');
         li.id = list.id + '-' + i;
         li.setAttribute('role', 'option');
-        var p = f.properties;
-        var main = p.type === 'municipality' ? p.city : p.name;
-        li.innerHTML = FD.esc(main) + '<small>' + FD.esc(p.postcode + ' ' + p.city) + '</small>';
+        li.innerHTML = FD.esc(it.main) + '<small>' + FD.esc(it.sub) + '</small>';
         li.addEventListener('mousedown', function (e) { e.preventDefault(); });
         li.addEventListener('click', function () { choose(i); });
         list.appendChild(li);
@@ -159,34 +167,43 @@
       if (lis[i]) { input.setAttribute('aria-activedescendant', lis[i].id); lis[i].scrollIntoView({ block: 'nearest' }); }
     }
     function choose(i) {
-      var f = items[i];
-      if (!f) return;
+      var it = items[i];
+      if (!it) return;
       // Annule toute recherche en attente : elle rouvrirait la liste sur l'adresse choisie.
       clearTimeout(timer);
       seq++;
       if (ctrl) ctrl.abort();
-      var p = f.properties;
-      input.value = p.label;
-      input.dataset.chosen = p.label;
+      input.value = it.label;
+      input.dataset.chosen = it.label;
       close();
       setMsg('');
-      opts.onSelect({ label: p.label, postcode: p.postcode, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] });
+      opts.onSelect({ label: it.label, postcode: it.postcode, lon: it.lon, lat: it.lat, preset: it.preset || null });
     }
     function search(q) {
       if (ctrl) ctrl.abort();
       ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var my = ++seq;
+      // Aéroports, gares, La Défense : destinations pré-réglées (dépose-minute) proposées EN PREMIER.
+      var presets = window.FDPlaces ? window.FDPlaces.match(q, 8).map(fromPreset) : [];
+      if (presets.length) { render(presets); setMsg(''); }
       var url = API + '?autocomplete=1&limit=10&lat=48.8566&lon=2.3522&q=' + encodeURIComponent(q);
       fetch(url, ctrl ? { signal: ctrl.signal } : {}).then(function (r) { return r.json(); }).then(function (j) {
         if (my !== seq) return;
         var all = (j && j.features) || [];
-        var ok = all.filter(function (f) { return isIdf(f.properties.postcode); }).slice(0, 5);
-        render(ok);
-        // Meilleure correspondance hors zone : on le dit, tout en proposant les adresses IDF proches.
-        setMsg(all.length && !isIdf(all[0].properties.postcode) ? FD.OUTSIDE_MSG : '');
+        var ok = all.filter(function (f) { return isIdf(f.properties.postcode); }).slice(0, 5).map(fromApi);
+        render(presets.concat(ok));
+        // Meilleure correspondance hors zone : on le dit (sauf si une destination pré-réglée correspond),
+        // tout en proposant les adresses IDF proches.
+        // Hors zone aussi quand la saisie est exactement une commune hors Île-de-France
+        // (« Beauvais » : des lieux-dits franciliens du même nom passent devant la ville).
+        var n = window.FDPlaces ? window.FDPlaces.norm : function (x) { return String(x).toLowerCase(); };
+        var city = all.some(function (f) {
+          return f.properties.type === 'municipality' && !isIdf(f.properties.postcode) && n(f.properties.name) === n(q);
+        });
+        setMsg(!presets.length && all.length && (!isIdf(all[0].properties.postcode) || city) ? FD.OUTSIDE_MSG : '');
       }).catch(function (e) {
         if (e && e.name === 'AbortError') return;
-        close();
+        if (!presets.length) close();
       });
     }
 
