@@ -7,8 +7,7 @@ var antispam = require('../lib/antispam');
 var geo = require('../lib/geo');
 var route = require('../lib/route');
 var T = require('../lib/templates');
-var notify = require('../lib/notify').notify;
-var Ref = require('../lib/reference');
+var notifyWithRef = require('../lib/notify').notifyWithRef;
 var W = require('../lib/whatsapp');
 
 var LABEL = { course: 'Course', colis: 'Colis' };
@@ -68,47 +67,50 @@ module.exports = http.postHandler(async function (body, req) {
 
   var when = V.frDateLong(d.date) + ' à ' + V.frTime(d.time);
   var name = d.prenom + ' ' + d.nom;
-  var ref = Ref.createRef();
-  var subject = '[' + LABEL[d.mode] + '] ' + ref + ' · ' + V.frDate(d.date) + ' à ' + V.frTime(d.time) + ' · ' + name + ' · ' +
-    (price ? P.fmtEur(price.total) : 'prix à confirmer');
-  var rows = [
-    ['Réservation', ref],
-    ['Type', d.mode === 'course' ? 'Course taxi moto (personne)' : 'Livraison de colis'],
-    ['Départ', from],
-    ['Arrivée', to],
-    ['Prise en charge', when + (pickup.night ? ' (nuit)' : '')],
-    ['Distance routière', routeInfo ? P.fmtKm(routeInfo.distanceKm) + ' km · environ ' + routeInfo.durationMin + ' min' : 'à confirmer']
-  ];
-  if (d.mode === 'course') rows.push(['Bagages', String(bagages)]);
-  rows.push(['Nom', name], ['Téléphone', d.tel], ['E-mail', d.email], ['Commentaire', d.commentaire]);
-
   var view = priceView(price);
   http.checkLimit(req, 'booking', http.FORM_LIMIT);
-  await notify(req, {
-    subject: subject,
-    replyTo: d.email,
-    kicker: LABEL[d.mode] + ' · ' + ref,
-    title: (d.mode === 'course' ? 'Course' : 'Colis') + ' le ' + when,
-    intro: 'Demande envoyée depuis le calculateur du site. Le client est redirigé vers WhatsApp pour l’envoyer avec le numéro ' + ref + '. Prix recalculé par le serveur.',
-    rows: rows,
-    price: view,
-    note: 'Prix estimatif. Le tarif définitif est à confirmer au client.',
-    buttons: [
-      { label: 'Appeler', href: 'tel:' + V.telHref(d.tel) },
-      { label: 'Répondre', href: 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + subject) },
-      { label: 'Voir l’itinéraire', href: T.mapsUrl(from, to) }
-    ]
-  }, {
-    // Gabarit fixe : aucun texte libre saisi (nom, commentaire) n'est renvoyé à l'adresse fournie.
-    to: d.email,
-    subject: 'Votre demande ' + (d.mode === 'course' ? 'de course' : 'de livraison') + ' du ' + V.frDate(d.date) + ' · Fast Driver 75',
-    kicker: 'Demande reçue',
-    title: 'Votre demande est bien reçue.',
-    intro: 'Fast Driver vous confirme rapidement le tarif définitif.',
-    // Adresses reprises seulement si elles viennent du géocodeur (jamais le texte brut saisi).
-    rows: rows.slice(0, 6).filter(function (r) { return verified || (r[0] !== 'Départ' && r[0] !== 'Arrivée'); }),
-    price: view,
-    note: 'Prix estimatif. Le tarif définitif vous est confirmé par Fast Driver.'
+  var ref = await notifyWithRef(req, function (ref) {
+    var subject = '[' + LABEL[d.mode] + '] ' + ref + ' · ' + V.frDate(d.date) + ' à ' + V.frTime(d.time) + ' · ' + name + ' · ' +
+      (price ? P.fmtEur(price.total) : 'prix à confirmer');
+    var rows = [
+      ['Réservation', ref],
+      ['Type', d.mode === 'course' ? 'Course taxi moto (personne)' : 'Livraison de colis'],
+      ['Départ', from],
+      ['Arrivée', to],
+      ['Prise en charge', when + (pickup.night ? ' (nuit)' : '')],
+      ['Distance routière', routeInfo ? P.fmtKm(routeInfo.distanceKm) + ' km · environ ' + routeInfo.durationMin + ' min' : 'à confirmer']
+    ];
+    if (d.mode === 'course') rows.push(['Bagages', String(bagages)]);
+    rows.push(['Nom', name], ['Téléphone', d.tel], ['E-mail', d.email], ['Commentaire', d.commentaire]);
+    return {
+      staff: {
+        subject: subject,
+        replyTo: d.email,
+        kicker: LABEL[d.mode] + ' · ' + ref,
+        title: (d.mode === 'course' ? 'Course' : 'Colis') + ' le ' + when,
+        intro: 'Demande envoyée depuis le calculateur du site. Le client est redirigé vers WhatsApp pour l’envoyer avec le numéro ' + ref + '. Prix recalculé par le serveur.',
+        rows: rows,
+        price: view,
+        note: 'Prix estimatif. Le tarif définitif est à confirmer au client.',
+        buttons: [
+          { label: 'Appeler', href: 'tel:' + V.telHref(d.tel) },
+          { label: 'Répondre', href: 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + subject) },
+          { label: 'Voir l’itinéraire', href: T.mapsUrl(from, to) }
+        ]
+      },
+      client: {
+        // Gabarit fixe : aucun texte libre saisi (nom, commentaire) n'est renvoyé à l'adresse fournie.
+        to: d.email,
+        subject: 'Votre demande ' + (d.mode === 'course' ? 'de course' : 'de livraison') + ' du ' + V.frDate(d.date) + ' · Fast Driver 75',
+        kicker: 'Demande reçue',
+        title: 'Votre demande est bien reçue.',
+        intro: 'Fast Driver vous confirme rapidement le tarif définitif.',
+        // Adresses reprises seulement si elles viennent du géocodeur (jamais le texte brut saisi).
+        rows: rows.slice(0, 6).filter(function (r) { return verified || (r[0] !== 'Départ' && r[0] !== 'Arrivée'); }),
+        price: view,
+        note: 'Prix estimatif. Le tarif définitif vous est confirmé par Fast Driver.'
+      }
+    };
   });
 
   return {

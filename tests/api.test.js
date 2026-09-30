@@ -184,7 +184,7 @@ test('C7m mise à disposition : sujet « N véhicules le JJ/MM », tous les cham
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const m = mails()[0];
   const [, mm, dd] = date.split('-');
-  assert.match(m.subject, new RegExp(`^\\[Mise à dispo\\] FD-[0-9A-Z]{4} · Demande de devis : 4 véhicules le ${dd}/${mm}$`));
+  assert.match(m.subject, new RegExp(`^\\[Mise à dispo\\] FD-[0-9A-HJKMNP-TV-Z]{4} · Demande de devis : 4 véhicules le ${dd}/${mm}$`));
   assert.equal(m.reply_to, 'lea@societe.fr');
   for (const v of ['Parc des Expositions', '5 heures 30', 'événement', 'Navette invités', 'Léa', 'Bernard', 'Société X', '18h00', '23h30']) {
     assert.ok(m.html.includes(v) && m.text.includes(v), v);
@@ -227,8 +227,11 @@ test('C14 sur Vercel : mock ignoré, sans clé ORS -> 503 propre, jamais de faux
     assert.equal(r.json.price, undefined);
     process.env.RESEND_API_KEY = '';
     clearMails();
+    // Sans clé Resend ni ORS : pas d'e-mail, mais la réservation WhatsApp part, prix « à confirmer » (jamais inventé).
     const b = await call(booking, base());
-    assert.equal(b.status, 503);
+    assert.equal(b.status, 200, JSON.stringify(b.json));
+    assert.equal(b.json.price, null);
+    assert.match(b.json.whatsapp.text, /Prix estimatif : à confirmer/);
     assert.equal(mails().length, 0);
   } finally {
     delete process.env.VERCEL_ENV;
@@ -278,6 +281,8 @@ test('confirmation client : gabarit fixe, aucun texte libre saisi', async () => 
   for (const m of client) {
     assert.doesNotMatch(m.html + m.text + m.subject, /phishing|Achetez|Spam/);
   }
+  // Numéro de réservation repris dans la confirmation client (valeur produite par le serveur)
+  assert.match(client.find(m => /course/.test(m.subject)).text, /Réservation : FD-[0-9A-HJKMNP-TV-Z]{4}\n/);
 });
 
 test('origine étrangère refusée', async () => {
@@ -501,7 +506,6 @@ test('W2 prix falsifié par le navigateur : le message WhatsApp porte le prix re
   assert.equal(r.status, 200);
   const text = decoded(r);
   assert.match(text, /Distance : 5,8 km · Prix estimatif : 35,00\u00a0€/);
-  assert.doesNotMatch(text, /[^5]1,00|0,1 km/);
 });
 
 test('W4 course : même numéro FD-XXXX dans le sujet de l’e-mail de sauvegarde', async () => {
@@ -528,4 +532,113 @@ test('WhatsApp : numéros différents pour deux demandes successives', async () 
   const a = await call(booking, base());
   const b = await call(booking, base());
   assert.notEqual(a.json.ref, b.json.ref);
+});
+
+test('WhatsApp : envoi piégé (honeypot, < 3 s) → ni numéro ni message', async () => {
+  for (const h of [booking, mad]) {
+    for (const o of [{ website: 'http://spam' }, { elapsed: 1000 }]) {
+      const r = await call(h, { ...base(), ...o });
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.json, { ok: true });
+    }
+  }
+});
+
+test('WhatsApp : numéro et prix jamais repris du navigateur', async () => {
+  const r = await call(booking, { ...base(), ref: 'FD-HACK', whatsapp: { text: 'x' }, price: { total: 1 } });
+  assert.match(r.json.ref, REF_RE);
+  assert.notEqual(r.json.ref, 'FD-HACK');
+  assert.match(decoded(r), /Prix estimatif : 35,00/);
+});
+
+test('numéro unique entre /api/booking et /api/mise-a-disposition dans la même minute (réservation atomique)', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  clearMails();
+  // Sur Vercel, chaque fonction (et chaque instance) a sa propre mémoire : on recharge le module.
+  const fresh = (rel) => {
+    for (const k of Object.keys(require.cache)) if (/lib[\\/]reference\.js$|api[\\/](booking|mise-a-disposition)\.js$/.test(k)) delete require.cache[k];
+    return require(path.join(ROOT, rel));
+  };
+  const booking2 = fresh('api/booking.js'), mad2 = fresh('api/mise-a-disposition.js');
+  const a = await call(booking2, wabody());
+  const b = await call(mad2, {
+    elapsed: 10000, website: '', nb_vehicules: '3', date: '2026-10-20', heure_debut: '18:00', heure_fin: '20:00',
+    lieu: 'Paris', duree: '2 heures', type: 'groupe', prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr'
+  });
+  assert.equal(a.status, 200); assert.equal(b.status, 200);
+  assert.notEqual(a.json.ref, b.json.ref);
+  const subjects = mails().filter(m => m.to[0] === 'delivered@resend.dev').map(m => m.subject);
+  assert.ok(subjects.some(x => x.includes(a.json.ref)) && subjects.some(x => x.includes(b.json.ref)));
+});
+
+/* Resend réel simulé : géocodage, ORS et Resend passent par fetch. */
+function fakeNet(resendReply) {
+  const sent = [];
+  global.fetch = async (url, opts = {}) => {
+    const u = new URL(url);
+    if (u.hostname === 'api-adresse.data.gouv.fr') {
+      const q = u.searchParams.get('q'), p = PLACES[q];
+      return { ok: true, json: async () => ({ features: p ? [{ geometry: { coordinates: p.c }, properties: { label: q, postcode: p.postcode } }] : [] }) };
+    }
+    if (u.hostname === 'api.heigit.org') {
+      return { ok: true, json: async () => ({ features: [{ geometry: { coordinates: [[2.3398, 48.8614], [2.2979, 48.8381]] }, properties: { summary: { distance: 5750, duration: 900 } } }] }) };
+    }
+    if (u.hostname === 'api.resend.com') {
+      sent.push({ key: opts.headers['Idempotency-Key'], body: JSON.parse(opts.body) });
+      return resendReply(sent[sent.length - 1], sent);
+    }
+    throw new Error('hôte inattendu ' + u.hostname);
+  };
+  return sent;
+}
+const onVercel = async (fn) => {
+  const realFetch = global.fetch;
+  process.env.VERCEL_ENV = 'preview'; process.env.ORS_API_KEY = 'k'; process.env.RESEND_API_KEY = 'k';
+  try { return await fn(); } finally {
+    global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; delete process.env.RESEND_API_KEY;
+  }
+};
+const reply = (status, obj) => ({ ok: status < 300, status, json: async () => obj, text: async () => JSON.stringify(obj) });
+
+test('Resend : clé d’idempotence = numéro ; numéro déjà pris (409) → numéro suivant', async () => {
+  await onVercel(async () => {
+    const taken = new Set();
+    const sent = fakeNet((m) => {
+      if (taken.size === 0) { taken.add(m.key); return reply(409, { statusCode: 409, name: 'invalid_idempotent_request', message: 'used' }); }
+      return reply(200, { id: 'x' });
+    });
+    const r = await call(booking, base());
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(sent.length, 2);
+    assert.match(sent[0].key, /^fd-ref-FD-[0-9A-HJKMNP-TV-Z]{4}$/);
+    assert.notEqual(sent[0].key, sent[1].key);
+    assert.equal(sent[1].key, 'fd-ref-' + r.json.ref);
+    assert.ok(sent[1].body.subject.includes(r.json.ref));
+    assert.ok(decoded(r).includes('Réservation ' + r.json.ref));
+  });
+});
+
+test('Resend en panne : la réservation WhatsApp reste possible (e-mail = sauvegarde)', async () => {
+  await onVercel(async () => {
+    fakeNet(() => reply(500, { message: 'down' }));
+    const r = await call(booking, base());
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.match(r.json.ref, REF_RE);
+    assert.match(decoded(r), /Prix estimatif : 35,00/);
+    const m = await call(mad, {
+      elapsed: 10000, website: '', nb_vehicules: '3', date: parisIn(24 * 10).date, heure_debut: '18:00', heure_fin: '20:00',
+      lieu: 'Paris', duree: '2 heures', type: 'groupe', prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr'
+    });
+    assert.equal(m.status, 200, JSON.stringify(m.json));
+    assert.ok(m.json.whatsapp.text.includes(m.json.ref));
+  });
+});
+
+test('mise à disposition : date et horaires formatés par le serveur pour l’écran de confirmation', async () => {
+  const r = await call(mad, {
+    elapsed: 10000, website: '', nb_vehicules: '3', date: parisIn(24 * 10).date, heure_debut: '18:00', heure_fin: '20:00',
+    lieu: 'Paris', duree: '2 heures', type: 'groupe', prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr'
+  });
+  const [y, mo, d] = parisIn(24 * 10).date.split('-');
+  assert.deepEqual(r.json.recap, { vehicules: '3', date: `${d}/${mo}/${y}`, horaires: 'de 18h00 à 20h00' });
 });

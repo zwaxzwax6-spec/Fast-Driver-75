@@ -4,8 +4,8 @@
   'use strict';
 
   var card = document.getElementById('resa-card');
-  if (!card || !window.FD || !window.FDPricing || !window.FDWhatsApp) return;
-  var FD = window.FD, P = window.FDPricing, W = window.FDWhatsApp;
+  if (!card || !window.FD || !window.FDPricing) return;
+  var FD = window.FD, P = window.FDPricing;
 
   var LEAFLET = {
     css: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
@@ -283,19 +283,34 @@
     showDone(res, recapRows(rows) + '<div class="q-total"><span>Prix estimatif</span><b>' + FD.esc(priceText) + '</b></div>');
   }
 
+  /* Lien WhatsApp : wa.me (fourni par le serveur) sur mobile, WhatsApp Web sur ordinateur. */
+  function waUrl(wa) {
+    if (!wa || !wa.text) return '';
+    var W = window.FDWhatsApp;
+    return W && W.isDesktop(navigator) ? W.link(wa.text, true) : wa.url;
+  }
+
   /* Écran « Dernière étape » puis ouverture de WhatsApp avec le message construit par le serveur.
      window.location.href et non window.open : après un appel réseau, iOS bloque les fenêtres surgissantes.
-     Le bouton « Ouvrir WhatsApp » (vrai lien, clic de l'utilisateur) relance le même lien si besoin. */
+     Le bouton « Ouvrir WhatsApp » (vrai lien, clic de l'utilisateur) relance le même lien si besoin.
+     L'écran est gardé en sessionStorage : au retour depuis WhatsApp (bouton Précédent), il est réaffiché. */
+  var SAVED = 'fd-derniere-etape', SAVED_MS = 30 * 60 * 1000;
   function showDone(res, recap) {
-    var wa = $('done-wa'), ico = done.querySelector('.done-ico');
-    var url = res.whatsapp && res.whatsapp.text ? W.link(res.whatsapp.text, W.isDesktop(navigator)) : '';
-    ico.classList.toggle('wa', !!url);
-    $('done-box').innerHTML = recap || '';
-    $('done-box').hidden = !recap || !url;
+    var url = waUrl(res.whatsapp);
+    renderDone(url, res.ref, recap);
+    if (!url) return;
+    try { sessionStorage.setItem(SAVED, JSON.stringify({ url: url, ref: res.ref, recap: recap, t: Date.now() })); } catch (e) { /* stockage indisponible */ }
+    window.location.href = url;
+  }
+  function renderDone(url, ref, recap) {
+    var wa = $('done-wa');
+    done.querySelector('.done-ico').classList.toggle('wa', !!url);
+    $('done-box').innerHTML = url ? recap : '';
+    $('done-box').hidden = !url || !recap;
     if (url) {
       $('done-title').textContent = 'Dernière étape';
       $('done-text').innerHTML = 'Envoyez le message WhatsApp qui vient de s’ouvrir.<br>Fast Driver vous confirme ensuite votre réservation.' +
-        '<span class="done-ref">Réservation ' + FD.esc(res.ref) + '</span>';
+        '<span class="done-ref">Réservation ' + FD.esc(ref) + '</span>';
       wa.href = url;
       wa.hidden = false;
     } else {
@@ -304,8 +319,15 @@
       wa.hidden = true;
     }
     openDone();
-    if (url) window.location.href = url;
   }
+  function restoreDone() {
+    var st = null;
+    try { st = JSON.parse(sessionStorage.getItem(SAVED) || 'null'); } catch (e) { /* stockage indisponible */ }
+    if (!st || !st.url || !(Date.now() - st.t < SAVED_MS)) return;
+    if (!/^https:\/\/(wa\.me|web\.whatsapp\.com)\//.test(st.url)) return;
+    renderDone(st.url, st.ref, st.recap);
+  }
+  function forgetDone() { try { sessionStorage.removeItem(SAVED); } catch (e) { /* stockage indisponible */ } }
 
   /* ---------- Envoi Plusieurs véhicules ---------- */
   mad.addEventListener('submit', function (e) {
@@ -322,10 +344,8 @@
     FD.post('/api/mise-a-disposition', data).then(function (r) {
       busy(mad, false);
       if (r.status === 200 && r.json.ok) {
-        return showDone(r.json, r.json.ref ? recapRows([
-          ['Véhicules', data.nb_vehicules], ['Date', data.date.split('-').reverse().join('/')],
-          ['Horaires', data.heure_debut.replace(':', 'h') + ' – ' + data.heure_fin.replace(':', 'h')]
-        ]) : '');
+        var rc = r.json.recap;
+        return showDone(r.json, rc ? recapRows([['Véhicules', rc.vehicules], ['Date', rc.date], ['Horaires', rc.horaires]]) : '');
       }
       if (r.json && r.json.errors) return FD.showErrors(mad, r.json.errors, r.json.error);
       mad.querySelector('.form-err').textContent = (r.json && r.json.error) || 'Envoi impossible pour le moment. Réessayez dans un instant.';
@@ -341,6 +361,7 @@
   }
 
   function resetAll() {
+    forgetDone();
     calc.reset();
     mad.reset();
     el.dep.dispatchEvent(new Event('input'));
@@ -355,4 +376,7 @@
   $('done-new').addEventListener('click', function () { resetAll(); setMode(state.mode); });
 
   setMode('course');
+  restoreDone();
+  // Retour depuis WhatsApp avec une page restaurée du cache (bfcache) : l'écran est déjà là ; sinon on le recharge.
+  window.addEventListener('pageshow', function (e) { if (e.persisted && done.hidden) restoreDone(); });
 })();

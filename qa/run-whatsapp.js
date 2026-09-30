@@ -226,8 +226,15 @@ async function uiBooking(ctx, mode, tag) {
     await c.p.click('#done-wa');
     for (let i = 0; i < 40 && ictx.waNav.length === beforeBtn; i++) await sleep(100);
     const again = ictx.waNav.slice(beforeBtn).filter(n => n.nav);
-    record('W5', c.screen.btnVisible && c.screen.btnText === 'Ouvrir WhatsApp' && c.screen.btnHref === (cNav[0] || {}).url && again.length >= 1 && again[0].url === (cNav[0] || {}).url,
-      `bouton visible: ${c.screen.btnVisible ? 'oui' : 'non'} « ${c.screen.btnText} » · href = lien ouvert automatiquement: ${c.screen.btnHref === (cNav[0] || {}).url ? 'oui' : 'non'} · clic → navigation WhatsApp interceptée: ${again.length} (${again[0] ? decode(again[0].url).base : '—'}, même lien: ${again[0] && again[0].url === (cNav[0] || {}).url ? 'oui' : 'non'})`);
+    const popupsBtn = ictx.popups - 1; // la page du parcours
+    // Retour depuis WhatsApp sans cache : la page se recharge, l'écran « Dernière étape » doit revenir.
+    await c.p.reload({ waitUntil: 'load' });
+    const back = await c.p.waitForSelector('#done:not([hidden])', { timeout: 8000 }).then(async () => ({
+      title: await c.p.innerText('#done-title'), href: await c.p.getAttribute('#done-wa', 'href'), ref: await c.p.innerText('.done-ref')
+    }), () => null);
+    const backOk = back && back.title === 'Dernière étape' && back.href === (cNav[0] || {}).url && back.ref.includes(c.json.ref);
+    record('W5', c.screen.btnVisible && c.screen.btnText === 'Ouvrir WhatsApp' && c.screen.btnHref === (cNav[0] || {}).url && again.length >= 1 && again[0].url === (cNav[0] || {}).url && popupsBtn === 0 && backOk,
+      `bouton visible: ${c.screen.btnVisible ? 'oui' : 'non'} « ${c.screen.btnText} » · href = lien ouvert automatiquement: ${c.screen.btnHref === (cNav[0] || {}).url ? 'oui' : 'non'} · clic → navigation WhatsApp interceptée: ${again.length} (${again[0] ? decode(again[0].url).base : '—'}, même lien: ${again[0] && again[0].url === (cNav[0] || {}).url ? 'oui' : 'non'}, même onglet: ${popupsBtn === 0 ? 'oui' : 'non'}) · retour sur le site : écran « ${back ? back.title : 'absent'} » réaffiché avec ${back ? back.ref : '—'}: ${backOk ? 'oui' : 'NON'}`);
 
     const cOk = cNav.length === 1 && dC.base === 'https://wa.me/33766139850' && dC.text === expectC;
     record('W3', cOk && c.popups === 0 && !c.errors.some(e => /popup|blocked|window\.open/i.test(e)) && /^Dernière étape$/.test(c.screen.title) && /^Envoyez le message WhatsApp qui vient de s’ouvrir\./.test(c.screen.text),
@@ -336,8 +343,9 @@ async function uiBooking(ctx, mode, tag) {
         const mm = all.find(x => x.subject.includes(ref) && (x.to || []).some(t => t === 'delivered@resend.dev') && (x.html || '').includes(marker));
         return { l, ref, m: mm, ok: !!mm && /^delivered/.test(mm.last_event) && mm.text.includes(ref) };
       });
-      record('W4', rows.length === 4 && rows.every(r => r.ok),
-        rows.map(r => `${r.l}: ${r.ref} → « ${r.m ? r.m.subject.replace(new RegExp(' ?' + RUN + '\\S*', 'g'), '') : 'absent'} » (${r.m ? r.m.last_event : '—'})`).join(' · '));
+      const distinct = new Set(refs.map(r => r[1])).size === refs.length;
+      record('W4', rows.length === 4 && rows.every(r => r.ok) && distinct,
+        `numéros tous distincts: ${distinct ? 'oui' : 'NON'} · ` + rows.map(r => `${r.l}: ${r.ref} → « ${r.m ? r.m.subject.replace(new RegExp(' ?' + RUN + '\\S*', 'g'), '') : 'absent'} » (${r.m ? r.m.last_event : '—'})`).join(' · '));
       const spamMails = await mailsSince(t0mail, 'Spam ' + RUN);
       const w = results._w6;
       record('W6', w.spamOk && spamMails.length === 0 && w.bad.status === 400 && ['prenom', 'tel', 'email'].every(x => w.bad.json.errors && w.bad.json.errors[x]) && w.inlC >= 6 && w.inlM >= 8 && w.calls === 0 && w.nav === 0,
