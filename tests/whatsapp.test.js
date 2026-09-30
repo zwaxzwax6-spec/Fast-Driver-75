@@ -48,10 +48,12 @@ test('lien WhatsApp : wa.me sur mobile, WhatsApp Web sur ordinateur, texte encod
   assert.equal(d.searchParams.get('text'), text);
 });
 
-test('détection ordinateur : navigator.userAgentData.mobile prioritaire (Android en « version pour ordinateur »)', () => {
-  const ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36';
-  assert.equal(WA.isDesktop({ userAgent: ua, maxTouchPoints: 5, userAgentData: { mobile: true } }), false);
-  assert.equal(WA.isDesktop({ userAgent: ua, maxTouchPoints: 0, userAgentData: { mobile: false } }), true);
+test('détection ordinateur : tablette Android = mobile, même si userAgentData.mobile vaut false', () => {
+  const tab = 'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36';
+  assert.equal(WA.isDesktop({ userAgent: tab, maxTouchPoints: 5, userAgentData: { mobile: false } }), false);
+  const linux = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36';
+  assert.equal(WA.isDesktop({ userAgent: linux, maxTouchPoints: 5, userAgentData: { mobile: true } }), false);
+  assert.equal(WA.isDesktop({ userAgent: linux, maxTouchPoints: 0, userAgentData: { mobile: false } }), true);
 });
 
 test('détection ordinateur : iPhone, Android et iPad (UA Mac tactile) = mobile', () => {

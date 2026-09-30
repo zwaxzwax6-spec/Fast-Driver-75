@@ -314,11 +314,18 @@
       wa.href = url;
       wa.hidden = false;
     } else {
+      // Pas de message prérempli (réponse sans numéro) : on garde un accès direct à Fast Driver sur WhatsApp.
       $('done-title').textContent = 'Demande envoyée';
-      $('done-text').textContent = 'Merci, Fast Driver revient vers vous très vite.';
-      wa.hidden = true;
+      $('done-text').textContent = 'Merci, Fast Driver revient vers vous très vite. Une question ? Écrivez-nous sur WhatsApp.';
+      wa.href = 'https://wa.me/33766139850';
+      wa.hidden = false;
     }
     openDone();
+  }
+  /* Seulement au retour depuis WhatsApp (Précédent) ou sur un rechargement, jamais sur une visite normale. */
+  function returning() {
+    var nav = window.performance && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+    return !!nav && (nav.type === 'back_forward' || nav.type === 'reload');
   }
   function restoreDone() {
     var st = null;
@@ -376,7 +383,7 @@
   $('done-new').addEventListener('click', function () { resetAll(); setMode(state.mode); });
 
   setMode('course');
-  restoreDone();
+  if (returning()) restoreDone(); else forgetDone();
   // Retour depuis WhatsApp avec une page restaurée du cache (bfcache) : l'écran est déjà là ; sinon on le recharge.
   window.addEventListener('pageshow', function (e) { if (e.persisted && done.hidden) restoreDone(); });
 })();

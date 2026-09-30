@@ -18,10 +18,10 @@
 
   /* nav = navigator. L'iPad se présente comme un Mac : on le reconnaît à l'écran tactile. */
   function isDesktop(nav) {
-    if (nav && nav.userAgentData && typeof nav.userAgentData.mobile === 'boolean') return !nav.userAgentData.mobile;
     var ua = (nav && nav.userAgent) || '';
     if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return false;
     if (/Macintosh/.test(ua) && nav.maxTouchPoints > 1) return false;
+    if (nav && nav.userAgentData && nav.userAgentData.mobile === true) return false; // signal mobile en plus
     return true;
   }
 

@@ -91,6 +91,7 @@ function parisDate(daysAhead) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + daysAhead * 864e5));
 }
 const fr = iso => iso.split('-').reverse().join('/');
+const eur = n => P.fmtEur(n).replace('\u00a0', ' '); // texte WhatsApp : espace normale avant €
 
 async function newContext(browser, kind) {
   const opts = kind === 'iphone'
@@ -140,7 +141,7 @@ function expectedBooking(ref, f, res) {
   const lines = ['Bonjour Fast Driver, je souhaite réserver :', 'Réservation ' + ref, 'Service : ' + (f.mode === 'colis' ? 'Colis' : 'Course'),
     'Départ : ' + res.from, 'Arrivée : ' + res.to, `Date : ${fr(f.date)} à ${f.time.replace(':', 'h')}`];
   if (f.mode === 'course') lines.push('Bagages : ' + f.bagages);
-  lines.push(`Distance : ${res.km != null ? P.fmtKm(res.km) + ' km' : 'à confirmer'} · Prix estimatif : ${res.price ? P.fmtEur(res.price.total) : 'à confirmer'}`);
+  lines.push(`Distance : ${res.km != null ? P.fmtKm(res.km) + ' km' : 'à confirmer'} · Prix estimatif : ${res.price ? eur(res.price.total) : 'à confirmer'}`);
   lines.push(`Nom : ${f.prenom} ${f.nom} · Tél : 06 12 34 56 78`);
   if (f.commentaire) lines.push('Commentaire : ' + f.commentaire);
   return lines.join('\n');
@@ -232,9 +233,14 @@ async function uiBooking(ctx, mode, tag) {
     const back = await c.p.waitForSelector('#done:not([hidden])', { timeout: 8000 }).then(async () => ({
       title: await c.p.innerText('#done-title'), href: await c.p.getAttribute('#done-wa', 'href'), ref: await c.p.innerText('.done-ref')
     }), () => null);
-    const backOk = back && back.title === 'Dernière étape' && back.href === (cNav[0] || {}).url && back.ref.includes(c.json.ref);
+    // Visite ordinaire ensuite (lien, saisie de l'adresse) : formulaire affiché, pas l'ancien écran.
+    await c.p.goto(BASE + '/recrutement', { waitUntil: 'load' });
+    await c.p.goto(BASE + '/#reserver', { waitUntil: 'load' });
+    await sleep(800);
+    const freshForm = await c.p.isVisible('#calc-form') && await c.p.isHidden('#done');
+    const backOk = back && back.title === 'Dernière étape' && back.href === (cNav[0] || {}).url && back.ref.includes(c.json.ref) && freshForm;
     record('W5', c.screen.btnVisible && c.screen.btnText === 'Ouvrir WhatsApp' && c.screen.btnHref === (cNav[0] || {}).url && again.length >= 1 && again[0].url === (cNav[0] || {}).url && popupsBtn === 0 && backOk,
-      `bouton visible: ${c.screen.btnVisible ? 'oui' : 'non'} « ${c.screen.btnText} » · href = lien ouvert automatiquement: ${c.screen.btnHref === (cNav[0] || {}).url ? 'oui' : 'non'} · clic → navigation WhatsApp interceptée: ${again.length} (${again[0] ? decode(again[0].url).base : '—'}, même lien: ${again[0] && again[0].url === (cNav[0] || {}).url ? 'oui' : 'non'}, même onglet: ${popupsBtn === 0 ? 'oui' : 'non'}) · retour sur le site : écran « ${back ? back.title : 'absent'} » réaffiché avec ${back ? back.ref : '—'}: ${backOk ? 'oui' : 'NON'}`);
+      `bouton visible: ${c.screen.btnVisible ? 'oui' : 'non'} « ${c.screen.btnText} » · href = lien ouvert automatiquement: ${c.screen.btnHref === (cNav[0] || {}).url ? 'oui' : 'non'} · clic → navigation WhatsApp interceptée: ${again.length} (${again[0] ? decode(again[0].url).base : '—'}, même lien: ${again[0] && again[0].url === (cNav[0] || {}).url ? 'oui' : 'non'}, même onglet: ${popupsBtn === 0 ? 'oui' : 'non'}) · retour sur le site : écran « ${back ? back.title : 'absent'} » réaffiché avec ${back ? back.ref : '—'} · visite ordinaire ensuite : formulaire ${freshForm ? 'affiché' : 'NON affiché'} → ${backOk ? 'oui' : 'NON'}`);
 
     const cOk = cNav.length === 1 && dC.base === 'https://wa.me/33766139850' && dC.text === expectC;
     record('W3', cOk && c.popups === 0 && !c.errors.some(e => /popup|blocked|window\.open/i.test(e)) && /^Dernière étape$/.test(c.screen.title) && /^Envoyez le message WhatsApp qui vient de s’ouvrir\./.test(c.screen.text),
@@ -309,7 +315,7 @@ async function uiBooking(ctx, mode, tag) {
       if (fake.json.ref) refs.push(['Course prix falsifié', fake.json.ref, 'Martin ' + RUN + '-W2']);
       const fKm = kmFrom(fText);
       const want = fKm != null ? P.computePrice({ mode: 'course', km: fKm, bagages: 1, night: false }).total : NaN;
-      record('W2', fake.status === 200 && fake.json.price && fake.json.price.total === want && fText.includes('Prix estimatif : ' + P.fmtEur(want)) && !/\b1,00|0,1 km/.test(fText) && quote && Math.abs(quote.total - want) < 0.001,
+      record('W2', fake.status === 200 && fake.json.price && fake.json.price.total === want && fText.includes('Prix estimatif : ' + eur(want)) && !/\b1,00|0,1 km/.test(fText) && quote && Math.abs(quote.total - want) < 0.001,
         `POST avec price=1, totalText « 1,00 € », km=0,1 → message « ${(fText.split('\n').find(l => l.startsWith('Distance')) || '—')} » · prix serveur ${fake.json.price ? P.fmtEur(fake.json.price.total) : '—'} = grille pour ${fKm != null ? P.fmtKm(fKm) : '?'} km + 1 bagage (${P.fmtEur(want)}) = prix de l’UI ${quote ? P.fmtEur(quote.total) : '—'}`);
 
       /* ============ W6 : anti-spam, validation, erreurs inline ============ */

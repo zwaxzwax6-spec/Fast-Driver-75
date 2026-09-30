@@ -227,11 +227,9 @@ test('C14 sur Vercel : mock ignoré, sans clé ORS -> 503 propre, jamais de faux
     assert.equal(r.json.price, undefined);
     process.env.RESEND_API_KEY = '';
     clearMails();
-    // Sans clé Resend ni ORS : pas d'e-mail, mais la réservation WhatsApp part, prix « à confirmer » (jamais inventé).
+    // Clé Resend absente = erreur de configuration : 503 visible (jamais de perte silencieuse des e-mails).
     const b = await call(booking, base());
-    assert.equal(b.status, 200, JSON.stringify(b.json));
-    assert.equal(b.json.price, null);
-    assert.match(b.json.whatsapp.text, /Prix estimatif : à confirmer/);
+    assert.equal(b.status, 503);
     assert.equal(mails().length, 0);
   } finally {
     delete process.env.VERCEL_ENV;
@@ -445,7 +443,7 @@ test('W1 course : lien wa.me décodé = texte attendu exact', async (t) => {
     'Arrivée : 300 Rue de Vaugirard 75015 Paris',
     'Date : 12/10/2026 à 14h30',
     'Bagages : 1',
-    'Distance : 5,8 km · Prix estimatif : 35,00\u00a0€',
+    'Distance : 5,8 km · Prix estimatif : 35,00 €',
     'Nom : Camille Martin · Tél : 06 12 34 56 78',
     'Commentaire : Casque taille M'
   ].join('\n'));
@@ -463,7 +461,7 @@ test('W1 colis : lien wa.me décodé = texte attendu exact (sans bagages, sans c
     'Départ : 160 Rue de Rivoli 75001 Paris',
     'Arrivée : 300 Rue de Vaugirard 75015 Paris',
     'Date : 12/10/2026 à 14h30',
-    'Distance : 5,8 km · Prix estimatif : 30,00\u00a0€',
+    'Distance : 5,8 km · Prix estimatif : 30,00 €',
     'Nom : Camille Martin · Tél : 06 12 34 56 78'
   ].join('\n'));
 });
@@ -505,7 +503,7 @@ test('W2 prix falsifié par le navigateur : le message WhatsApp porte le prix re
   const r = await call(booking, wabody({ price: 1, total: 1, totalText: '1,00 €', km: 0.1, distanceKm: 0.1 }));
   assert.equal(r.status, 200);
   const text = decoded(r);
-  assert.match(text, /Distance : 5,8 km · Prix estimatif : 35,00\u00a0€/);
+  assert.match(text, /Distance : 5,8 km · Prix estimatif : 35,00 €/);
 });
 
 test('W4 course : même numéro FD-XXXX dans le sujet de l’e-mail de sauvegarde', async () => {
@@ -641,4 +639,19 @@ test('mise à disposition : date et horaires formatés par le serveur pour l’�
   });
   const [y, mo, d] = parisIn(24 * 10).date.split('-');
   assert.deepEqual(r.json.recap, { vehicules: '3', date: `${d}/${mo}/${y}`, horaires: 'de 18h00 à 20h00' });
+});
+
+test('WhatsApp : espace normale avant € (texte brut, recherche dans WhatsApp Business)', async () => {
+  const r = await call(booking, base());
+  assert.doesNotMatch(r.json.whatsapp.text, / /);
+});
+
+test('mock : clé d’idempotence expirée après 24 h, comme chez Resend', async (t) => {
+  clearMails();
+  const mail = require(path.join(ROOT, 'lib/mail.js'));
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  await mail.sendMail({ subject: 'a', html: 'a', text: 'a', idempotencyKey: 'fd-ref-FD-TEST' });
+  await assert.rejects(mail.sendMail({ subject: 'b', html: 'b', text: 'b', idempotencyKey: 'fd-ref-FD-TEST' }), mail.KeyTakenError);
+  t.mock.timers.setTime(Date.parse('2026-10-11T10:01:00Z'));
+  await mail.sendMail({ subject: 'c', html: 'c', text: 'c', idempotencyKey: 'fd-ref-FD-TEST' });
 });
