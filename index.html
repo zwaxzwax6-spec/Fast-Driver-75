@@ -243,6 +243,7 @@ footer{color:rgba(255,255,255,.72)}
 .l-notes{margin-top:18px;display:flex;flex-direction:column;gap:8px;font-size:.9rem;color:rgba(255,255,255,.78)}
 .l-notes p{display:flex;align-items:center;gap:10px}
 .l-notes p::before{content:"";width:14px;height:1.5px;background:#fff;flex:none}
+.step-ico{width:18px;height:18px;margin-right:7px;vertical-align:-3px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .svc.wide{grid-column:1/-1}
 .svc.wide .svc-body{padding:30px}
 .tab{user-select:none;-webkit-user-select:none;line-height:1.2}
@@ -394,7 +395,7 @@ footer{color:rgba(255,255,255,.72)}
           <div class="field" data-field="date"><label for="f-date">Date</label><input id="f-date" name="date" type="date" required><p class="f-err"></p></div>
           <div class="field" data-field="time"><label for="f-time">Heure</label><input id="f-time" name="time" type="time" step="300" required><p class="f-err"></p></div>
         </div>
-        <div class="field" data-field="bagages" id="f-bag-wrap"><label for="f-bag">Bagages <span class="opt">(+5&nbsp;&euro; par bagage)</span></label>
+        <div class="field" data-field="bagages" id="f-bag-wrap"><label for="f-bag">Bagages <span class="opt" id="f-bag-price">(+5&nbsp;&euro; par bagage)</span></label>
           <select id="f-bag" name="bagages"><option value="0">Aucun bagage</option><option value="1">1 bagage</option><option value="2">2 bagages</option><option value="3">3 bagages</option></select><p class="f-err"></p></div>
 
         <p class="q-alert" id="q-alert" role="alert" hidden></p>
@@ -508,7 +509,7 @@ footer{color:rgba(255,255,255,.72)}
     <div class="steps-grid">
       <div class="step rv"><div class="step-n">01</div><b>Renseignez votre trajet</b><p>Personnes ou colis, adresses de d&eacute;part et d'arriv&eacute;e, heure souhait&eacute;e, bagages &eacute;ventuels.</p></div>
       <div class="step rv"><div class="step-n">02</div><b>Recevez votre tarif</b><p>Le prix s'affiche directement, avant d'envoyer votre demande.</p></div>
-      <div class="step rv"><div class="step-n">03</div><b>Arrivez &agrave; l'heure</b><p>Fast Driver vous confirme la course et vous prend en charge &agrave; l'heure convenue. &Agrave; l'heure. Toujours.</p></div>
+      <div class="step rv"><div class="step-n">03</div><b><svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16.2 9.5"/></svg>Fast Driver vous confirme la course</b><p>Vous recevez la confirmation de votre course et du tarif d&eacute;finitif. &Agrave; l'heure. Toujours.</p></div>
     </div>
   </div>
 </section>

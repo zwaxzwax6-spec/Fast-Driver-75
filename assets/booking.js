@@ -62,6 +62,9 @@
     a.addEventListener('click', function () { setMode(a.dataset.openTab); });
   });
 
+  // Libellé du supplément bagage tiré de la constante unique de la grille.
+  $('f-bag-price').textContent = '(+' + P.fmtEur(P.BAGAGE_EUR).replace(',00', '') + ' par bagage)';
+
   var today = P.todayParis();
   el.date.min = today;
   $('m-date').min = today;

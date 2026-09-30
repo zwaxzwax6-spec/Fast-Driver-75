@@ -354,3 +354,19 @@ test('mise à disposition : heure de début déjà passée aujourd’hui refusé
   const ok = await call(mad, { elapsed: 10000, nb_vehicules: '3', date: '2026-10-10', heure_debut: '20:00', heure_fin: '23:00', lieu: 'Paris', duree: '3 h', type: 'groupe', prenom: 'A', nom: 'B', tel: '0612345678', email: 'a@b.fr' });
   assert.equal(ok.status, 200, JSON.stringify(ok.json));
 });
+
+test('ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization', async () => {
+  const realFetch = global.fetch, seen = [];
+  global.fetch = async (url, opts) => {
+    seen.push({ url: String(url), auth: opts && opts.headers && opts.headers.Authorization });
+    return { ok: true, json: async () => ({ features: [{ geometry: { coordinates: [[2.3, 48.8], [2.31, 48.81]] }, properties: { summary: { distance: 1500, duration: 300 } } }] }) };
+  };
+  process.env.VERCEL_ENV = 'preview';
+  process.env.ORS_API_KEY = 'test-key';
+  try {
+    const r = await call(quote, { mode: 'course', from: { lon: 2.301, lat: 48.801 }, to: { lon: 2.311, lat: 48.811 } });
+    assert.equal(r.status, 200);
+    assert.equal(seen[0].url, 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson');
+    assert.equal(seen[0].auth, 'test-key');
+  } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
+});

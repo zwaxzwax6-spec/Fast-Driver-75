@@ -11,7 +11,8 @@
   var BASE_CENTS = 3000;          // 30 € jusqu'à 10 km
   var BASE_TENTHS = 100;          // 10,0 km
   var RATE_CENTS = { course: 200, colis: 180 }; // €/km au-delà de 10 km
-  var BAGAGE_CENTS = 500;
+  var BAGAGE_EUR = 5;             // +5 € par bagage, dès le 1er bagage (décision client) : seule valeur à modifier
+  var BAGAGE_CENTS = BAGAGE_EUR * 100;
   var NIGHT_CENTS = 1000;
   var MAX_BAGAGES = 3;
   var NIGHT_NOTICE_MS = 24 * 3600 * 1000;
@@ -125,6 +126,7 @@
   return {
     TZ: TZ,
     MAX_BAGAGES: MAX_BAGAGES,
+    BAGAGE_EUR: BAGAGE_EUR,
     computePrice: computePrice,
     roundKm: roundKm,
     fmtEur: fmtEur,
