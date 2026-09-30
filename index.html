@@ -324,6 +324,14 @@ footer{color:rgba(255,255,255,.72)}
 .route-map .leaflet-control-attribution a{color:var(--taupe-2)}
 @media(max-width:880px){.field input,.field select,.field textarea{font-size:16px}}
 @media(max-width:480px){.tab{font-size:.76rem;padding:9px 6px;gap:5px}.tab svg{width:12px;height:12px}.resa-card{padding:20px}}
+/* ===== Formulaires responsive (mobile) ===== */
+.row2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;align-items:end}
+.field input,.field select,.field textarea{min-width:0;max-width:100%}
+.field input,.field select{height:48px}
+@media(max-width:559.98px){.row2:not(.keep){grid-template-columns:minmax(0,1fr)}}
+@media(max-width:559.98px){.field input[type=date],.field input[type=time]{padding-left:11px;padding-right:9px}.field input::-webkit-calendar-picker-indicator{margin-left:2px}}
+.fab{transition:transform .2s,opacity .2s ease,visibility 0s}
+.fab.fab-off{opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s,opacity .2s ease,visibility 0s .2s}
 @media(prefers-reduced-motion:reduce){.route-map,.route-map .rm-in,.fd-pin .dot,.fd-pill{transition:none}.fd-pin.on .fd-halo{animation:none;opacity:.35;transform:scale(1)}}
 </style>
 </head>
@@ -389,7 +397,7 @@ footer{color:rgba(255,255,255,.72)}
       <h2 class="s-title">R&eacute;servez votre course<br>en 30 secondes.</h2>
       <p class="s-sub">Renseignez votre trajet : le prix s'affiche directement. Envoyez votre demande en un clic, Fast Driver vous confirme votre course.</p>
     </div>
-    <div class="resa-card rv" id="resa-card">
+    <div class="resa-card rv" id="resa-card" data-fab-avoid>
       <div class="tabs" role="tablist" aria-label="Type de demande">
         <div class="tab active" id="tab-course" role="tab" tabindex="0" aria-selected="true" aria-controls="calc-form" data-mode="course"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 12c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5z"/></svg>Course</div>
         <div class="tab" id="tab-colis" role="tab" tabindex="-1" aria-selected="false" aria-controls="calc-form" data-mode="colis"><svg viewBox="0 0 24 24"><path d="M21 8.5 12 3 3 8.5v7L12 21l9-5.5v-7zM12 5.3l6.1 3.7L12 12.7 5.9 9 12 5.3z"/></svg>Colis</div>
@@ -404,7 +412,7 @@ footer{color:rgba(255,255,255,.72)}
         <div class="field" data-field="to"><label for="f-arr"><span class="dot r"></span>Adresse d'arriv&eacute;e</label>
           <input id="f-arr" type="text" placeholder="Ex : A&eacute;roport d'Orly" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="f-arr-list">
           <ul class="ac-list" id="f-arr-list" role="listbox" hidden></ul><p class="f-err" id="f-arr-err"></p></div>
-        <div class="row2">
+        <div class="row2 keep">
           <div class="field" data-field="date"><label for="f-date">Date</label><input id="f-date" name="date" type="date" required><p class="f-err"></p></div>
           <div class="field" data-field="time"><label for="f-time">Heure</label><input id="f-time" name="time" type="time" step="300" required><p class="f-err"></p></div>
         </div>
@@ -424,7 +432,7 @@ footer{color:rgba(255,255,255,.72)}
           <p class="q-note" id="q-note" hidden>Prix estimatif. Le tarif d&eacute;finitif vous est confirm&eacute; par Fast Driver.</p>
         </div>
 
-        <div class="row2">
+        <div class="row2 keep">
           <div class="field" data-field="prenom"><label for="c-prenom">Pr&eacute;nom</label><input id="c-prenom" name="prenom" type="text" autocomplete="given-name" maxlength="60" required><p class="f-err"></p></div>
           <div class="field" data-field="nom"><label for="c-nom">Nom</label><input id="c-nom" name="nom" type="text" autocomplete="family-name" maxlength="60" required><p class="f-err"></p></div>
         </div>
@@ -451,7 +459,7 @@ footer{color:rgba(255,255,255,.72)}
         <div class="field" data-field="lieu"><label for="m-lieu">Lieu</label><input id="m-lieu" name="lieu" type="text" placeholder="Ex : Paris 8e, salle de r&eacute;ception" maxlength="200" required><p class="f-err"></p></div>
         <div class="field" data-field="duree"><label for="m-duree">Dur&eacute;e de mise &agrave; disposition</label><input id="m-duree" name="duree" type="text" placeholder="Ex : 4 heures" maxlength="100" required><p class="f-err"></p></div>
         <div class="field" data-field="details"><label for="m-details">D&eacute;tails <span class="opt">(optionnel)</span></label><textarea id="m-details" name="details" rows="3" maxlength="2000" placeholder="Trajets, nombre de passagers, colis&hellip;"></textarea><p class="f-err"></p></div>
-        <div class="row2">
+        <div class="row2 keep">
           <div class="field" data-field="prenom"><label for="m-prenom">Pr&eacute;nom</label><input id="m-prenom" name="prenom" type="text" autocomplete="given-name" maxlength="60" required><p class="f-err"></p></div>
           <div class="field" data-field="nom"><label for="m-nom">Nom</label><input id="m-nom" name="nom" type="text" autocomplete="family-name" maxlength="60" required><p class="f-err"></p></div>
         </div>

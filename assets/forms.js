@@ -104,6 +104,49 @@
     });
   };
 
+  /* ---------- Bouton WhatsApp flottant : ne recouvre jamais un formulaire ----------
+     Masqué (fondu 200 ms) quand un champ a le focus, quand un formulaire est à l'écran sur mobile,
+     et, sur grand écran, dès qu'il chevaucherait un formulaire. Réapparaît ensuite. */
+  (function fabGuard() {
+    var fab = document.querySelector('.fab');
+    var zones = [].slice.call(document.querySelectorAll('[data-fab-avoid]'));
+    if (!fab || !zones.length) return;
+    var mobile = window.matchMedia('(max-width: 880px)');
+    var onScreen = [], focused = false, ticking = false;
+    function shown(z) { return !z.hidden && !z.closest('[hidden]'); }
+    function overlaps(z) {
+      var f = fab.getBoundingClientRect(), r = z.getBoundingClientRect();
+      return r.left < f.right + 12 && r.right > f.left - 12 && r.top < f.bottom + 12 && r.bottom > f.top - 12;
+    }
+    function update() {
+      ticking = false;
+      var hide = focused ||
+        (mobile.matches ? onScreen.some(shown) : zones.some(function (z) { return shown(z) && overlaps(z); }));
+      fab.classList.toggle('fab-off', hide);
+    }
+    function schedule() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        var i = onScreen.indexOf(e.target);
+        if (e.isIntersecting && i === -1) onScreen.push(e.target);
+        if (!e.isIntersecting && i !== -1) onScreen.splice(i, 1);
+      });
+      schedule();
+    });
+    zones.forEach(function (z) { io.observe(z); });
+    var FIELD = 'input:not([type=hidden]),select,textarea';
+    document.addEventListener('focusin', function (e) { if (e.target.matches && e.target.matches(FIELD)) { focused = true; schedule(); } });
+    document.addEventListener('focusout', function () {
+      // Passage d'un champ au suivant : on attend le nouveau focus avant de décider.
+      setTimeout(function () { var a = document.activeElement; focused = !!(a && a.matches && a.matches(FIELD)); schedule(); }, 0);
+    });
+    addEventListener('scroll', schedule, { passive: true });
+    addEventListener('resize', schedule);
+    // Changement d'onglet / écran de confirmation : les zones changent de visibilité sans défiler.
+    new MutationObserver(schedule).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+    schedule();
+  })();
+
   /* ---------- Autocomplétion API Adresse (gratuite, sans clé) ---------- */
   var API = 'https://api-adresse.data.gouv.fr/search/';
   function isIdf(cp) { return window.FDPricing.isIdfPostcode(cp); } // règle unique, partagée avec le serveur

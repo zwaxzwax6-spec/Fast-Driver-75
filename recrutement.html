@@ -312,6 +312,14 @@ footer{color:rgba(255,255,255,.72)}
 @media(max-width:480px){.tab{font-size:.76rem;padding:9px 6px;gap:5px}.tab svg{width:12px;height:12px}.resa-card{padding:20px}}
 @media(prefers-reduced-motion:reduce){.route-map{transition:none}}
 
+/* ===== Formulaires responsive (mobile) ===== */
+.row2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;align-items:end}
+.field input,.field select,.field textarea{min-width:0;max-width:100%}
+.field input,.field select{height:48px}
+@media(max-width:559.98px){.row2:not(.keep){grid-template-columns:minmax(0,1fr)}}
+@media(max-width:559.98px){.field input[type=date],.field input[type=time]{padding-left:11px;padding-right:9px}.field input::-webkit-calendar-picker-indicator{margin-left:2px}}
+.fab{transition:transform .2s,opacity .2s ease,visibility 0s}
+.fab.fab-off{opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s,opacity .2s ease,visibility 0s .2s}
 /* ---------- HERO COURT RECRUTEMENT ---------- */
 .rec-hero{background:var(--noir);padding:150px 0 84px;text-align:center}
 .rec-hero .kicker{justify-content:center;color:rgba(255,255,255,.62)}
@@ -359,9 +367,9 @@ footer{color:rgba(255,255,255,.72)}
       <p class="s-sub">Pr&eacute;sentez-vous en quelques lignes : votre v&eacute;hicule, votre exp&eacute;rience et vos disponibilit&eacute;s. Nous revenons vers vous rapidement.</p>
     </div>
     <div>
-      <form class="resa-card rv" id="rec-form" novalidate>
+      <form class="resa-card rv" id="rec-form" novalidate data-fab-avoid>
         <div class="hp" aria-hidden="true"><label>Site web<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-        <div class="row2">
+        <div class="row2 keep">
         <div class="field" data-field="nom"><label for="r-nom">Nom</label><input id="r-nom" name="nom" type="text" required autocomplete="family-name" maxlength="60"><p class="f-err"></p></div>
         <div class="field" data-field="prenom"><label for="r-prenom">Pr&eacute;nom</label><input id="r-prenom" name="prenom" type="text" required autocomplete="given-name" maxlength="60"><p class="f-err"></p></div>
         </div>
@@ -370,20 +378,20 @@ footer{color:rgba(255,255,255,.72)}
         <div class="field" data-field="email"><label for="r-email">E-mail</label><input id="r-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" maxlength="120" required><p class="f-err"></p></div>
         </div>
         <div class="row2">
-        <div class="field" data-field="vehicule_modele"><label for="r-vehicule_modele">V&eacute;hicule poss&eacute;d&eacute; : mod&egrave;le</label><input id="r-vehicule_modele" name="vehicule_modele" type="text" required maxlength="80" placeholder="Ex : Honda Forza 750"><p class="f-err"></p></div>
+        <div class="field" data-field="vehicule_modele"><label for="r-vehicule_modele">V&eacute;hicule (mod&egrave;le)</label><input id="r-vehicule_modele" name="vehicule_modele" type="text" required maxlength="80" placeholder="Ex : Honda Forza 750"><p class="f-err"></p></div>
         <div class="field" data-field="vehicule_cylindree"><label for="r-vehicule_cylindree">Cylindr&eacute;e</label><input id="r-vehicule_cylindree" name="vehicule_cylindree" type="text" required maxlength="20" placeholder="Ex : 750 cm3"><p class="f-err"></p></div>
         </div>
-        <div class="field" data-field="experience_pro"><label for="r-experience_pro">Exp&eacute;rience professionnelle</label><textarea id="r-experience_pro" name="experience_pro" rows="3" maxlength="1500" required placeholder="Vos postes, vos ann&eacute;es d&rsquo;exp&eacute;rience&hellip;"></textarea><p class="f-err"></p></div>
-        <div class="field" data-field="experience_secteur"><label for="r-experience_secteur">Exp&eacute;rience taxi-moto / transport / livraison / course</label><textarea id="r-experience_secteur" name="experience_secteur" rows="3" maxlength="1500" required placeholder="Taxi moto, VTC, coursier, livraison&hellip;"></textarea><p class="f-err"></p></div>
-        <div class="field" data-field="motivations"><label for="r-motivations">Motivations pour rejoindre Fast Driver</label><textarea id="r-motivations" name="motivations" rows="3" maxlength="1500" required placeholder="Ce qui vous donne envie de nous rejoindre&hellip;"></textarea><p class="f-err"></p></div>
+        <div class="field" data-field="experience_pro"><label for="r-experience_pro">Exp&eacute;rience pro</label><textarea id="r-experience_pro" name="experience_pro" rows="3" maxlength="1500" required placeholder="Vos postes, vos ann&eacute;es d&rsquo;exp&eacute;rience&hellip;"></textarea><p class="f-err"></p></div>
+        <div class="field" data-field="experience_secteur"><label for="r-experience_secteur">Exp&eacute;rience terrain</label><textarea id="r-experience_secteur" name="experience_secteur" rows="3" maxlength="1500" required placeholder="Taxi-moto, VTC, coursier, livraison&hellip;"></textarea><p class="f-err"></p></div>
+        <div class="field" data-field="motivations"><label for="r-motivations">Motivations</label><textarea id="r-motivations" name="motivations" rows="3" maxlength="1500" required placeholder="Ce qui vous donne envie de nous rejoindre&hellip;"></textarea><p class="f-err"></p></div>
         <div class="row2">
         <div class="field" data-field="disponibilite"><label for="r-disponibilite">Disponibilit&eacute;</label><select id="r-disponibilite" name="disponibilite" required><option value="">Choisir</option><option value="temps plein">Temps plein</option><option value="temps partiel">Temps partiel</option></select><p class="f-err"></p></div>
-        <div class="field" data-field="horaires"><label for="r-horaires">Disponibilit&eacute;s / horaires</label><input id="r-horaires" name="horaires" type="text" required maxlength="500" placeholder="Ex : soirs et week-ends"><p class="f-err"></p></div>
+        <div class="field" data-field="horaires"><label for="r-horaires">Disponibilit&eacute;s</label><input id="r-horaires" name="horaires" type="text" required maxlength="500" placeholder="Ex : soirs et week-ends"><p class="f-err"></p></div>
         </div>
         <button class="btn resa-btn" type="submit">Envoyer ma candidature <svg viewBox="0 0 24 24"><path d="M5 12h12m0 0-5-5m5 5-5 5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <p class="form-err" role="alert"></p>
       </form>
-      <div class="resa-card done" id="rec-done" hidden tabindex="-1">
+      <div class="resa-card done" id="rec-done" hidden tabindex="-1" data-fab-avoid>
         <div class="done-ico"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
         <h3>Candidature envoy&eacute;e</h3>
         <p id="rec-done-text">Merci. Fast Driver revient vers vous rapidement.</p>
