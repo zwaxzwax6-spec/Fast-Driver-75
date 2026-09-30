@@ -200,7 +200,8 @@
         var city = all.some(function (f) {
           return f.properties.type === 'municipality' && !isIdf(f.properties.postcode) && n(f.properties.name) === n(q);
         });
-        setMsg(!presets.length && all.length && (!isIdf(all[0].properties.postcode) || city) ? FD.OUTSIDE_MSG : '');
+        // Une commune hors zone saisie telle quelle est toujours signalée (« Lyon » : message + Gare de Lyon proposée).
+        setMsg(city || (!presets.length && all.length && !isIdf(all[0].properties.postcode)) ? FD.OUTSIDE_MSG : '');
       }).catch(function (e) {
         if (e && e.name === 'AbortError') return;
         if (!presets.length) close();

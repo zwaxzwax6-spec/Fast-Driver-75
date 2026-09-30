@@ -151,11 +151,14 @@
   }
 
   /* Compteur du prix : défile de la valeur affichée vers la nouvelle. */
-  var shown = 0, countRaf = 0, revealTimer = 0;
+  var shown = 0, countRaf = 0;
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function countTo(target, ms) {
     cancelAnimationFrame(countRaf);
     var from = shown, start = performance.now();
-    if (!ms) { shown = target; el.total.textContent = P.fmtEur(target); return; }
+    // Lecteurs d'écran : une seule annonce, le prix final (le compteur visuel n'est pas annoncé).
+    $('q-live').textContent = 'Prix estimatif : ' + P.fmtEur(target);
+    if (!ms || reducedMotion) { shown = target; el.total.textContent = P.fmtEur(target); return; }
     (function step(now) {
       var t = Math.min(1, (now - start) / ms), k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       shown = Math.round((from + (target - from) * k) * 100) / 100;
@@ -164,7 +167,7 @@
     })(start);
   }
 
-  /* opts.reveal : nouvel itinéraire → le total part de 0 et défile quand la carte affiche sa pastille. */
+  /* opts.reveal : nouvel itinéraire → le total défile de 0 à sa valeur (600 ms), comme la pastille de la carte. */
   function renderPrice(opts) {
     var r = state.route;
     if (!r || state.mode === 'flotte') {
@@ -178,9 +181,8 @@
     }).join('');
     state.total = price.total;
     if (opts && opts.reveal) {
-      countTo(0, 0);
-      clearTimeout(revealTimer);
-      revealTimer = setTimeout(function () { countTo(state.total, 600); }, 2600); // si la carte ne s'affiche pas
+      shown = 0;
+      countTo(price.total, 600);
     } else {
       countTo(price.total, shown ? 400 : 0);
     }
@@ -226,8 +228,7 @@
       FDMap.show(el.mapIn, geometry, {
         km: state.route ? state.route.km : 0,
         min: state.route ? state.route.min : 0,
-        onFail: closeMap,
-        onReveal: function (ms) { clearTimeout(revealTimer); if (state.route) countTo(state.total, ms); }
+        onFail: closeMap
       });
     }).catch(closeMap);
   }

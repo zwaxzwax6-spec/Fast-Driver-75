@@ -142,7 +142,7 @@ async function pickAddress(page, sel, query, matchRe, kind) {
 }
 const ROUTES = {
   paris: [['160 rue de Rivoli', /75001/], ['300 rue de Vaugirard', /75015/]],
-  orly: [['160 rue de Rivoli', /75001/], ['Aeroport d\'Orly', /94310|94390/]],
+  orly: [['160 rue de Rivoli', /75001/], ['Aeroport d\'Orly', /94310|94390/, 'api']],
   versailles: [['Place d\'Armes Versailles', /78000/], ['Rue de la Légion d\'Honneur Saint-Denis', /93200/]]
 };
 /* Recette C19 : [nom, départ, arrivée] ; chaque point = [saisie, motif de la suggestion à choisir]. */
@@ -161,8 +161,8 @@ const TRIPS = [
 ];
 async function route(page, name) {
   const [a, b] = ROUTES[name];
-  await pickAddress(page, '#f-dep', a[0], a[1]);
-  await pickAddress(page, '#f-arr', b[0], b[1]);
+  await pickAddress(page, '#f-dep', a[0], a[1], a[2]);
+  await pickAddress(page, '#f-arr', b[0], b[1], b[2]);
 }
 async function fillContact(page, prefix, email) {
   await page.fill(`#${prefix}-prenom`, 'Camille');
@@ -729,8 +729,16 @@ function proxy(port, target, withToken) {
       }));
       const moto = p.locator('.fd-moto-in');
       await p.waitForFunction(() => +getComputedStyle(document.querySelector('.fd-moto')).opacity > 0.9, null, { timeout: 6000 });
-      const mb = await moto.boundingBox();
-      await p.screenshot({ path: shot('C20-moto-zoom.png'), clip: { x: mb.x - 10, y: mb.y - 10, width: mb.width + 20, height: mb.height + 20 } });
+      // La moto bouge : on capture la carte (immobile) et on découpe autour de la moto mesurée au même instant.
+      const pos = await p.evaluate(() => { const m = document.querySelector('.fd-moto-in').getBoundingClientRect(), b = document.getElementById('route-map').getBoundingClientRect(); return { x: m.x - b.x, y: m.y - b.y, w: m.width, h: m.height }; });
+      await p.locator('#route-map').screenshot({ path: shot('C20-carte-boucle-1440.png') });
+      {
+        const img = PNG.sync.read(fs.readFileSync(shot('C20-carte-boucle-1440.png'))), dpr = 3, pad = 12;
+        const x0 = Math.max(0, Math.round((pos.x - pad) * dpr)), y0 = Math.max(0, Math.round((pos.y - pad) * dpr));
+        const w = Math.min(img.width - x0, Math.round((pos.w + 2 * pad) * dpr)), h = Math.min(img.height - y0, Math.round((pos.h + 2 * pad) * dpr));
+        const o = new PNG({ width: w, height: h }); PNG.bitblt(img, o, x0, y0, w, h, 0, 0);
+        fs.writeFileSync(shot('C20-moto-zoom.png'), PNG.sync.write(o));
+      }
       const motoInfo = await p.evaluate(() => {
         const e = document.querySelector('.fd-moto-in'), cs = getComputedStyle(e);
         return { w: e.offsetWidth, h: e.offsetHeight, bg: cs.backgroundColor, color: cs.color, radius: cs.borderRadius, tabler: e.innerHTML.includes('M7.5 14h5l4 -4h-10.5m1.5 4l4 -4') && e.innerHTML.includes('M13 6h2l1.5 3l2 4') };

@@ -21,7 +21,7 @@
   var map = null, root = null, pill = null, trailPane = null, dots = [], motoEl = null, motoIcon = null;
   var segs = [], depMarker = null, arrMarker = null;
   var latlngs = [], pts = [], cum = [], total = 0, info = null;
-  var raf = 0, phase = 'idle', t0 = 0, pausedAt = 0, visible = true, token = 0, failCb = null, revealCb = null, tileOk = 0, first = true;
+  var raf = 0, phase = 'idle', t0 = 0, pausedAt = 0, visible = true, token = 0, failCb = null, tileOk = 0, first = true, runState = '';
 
   /* ---------- Outils ---------- */
   function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
@@ -31,6 +31,7 @@
     return 'rgb(' + v + ',' + v + ',' + v + ')';
   }
   function setState(s) { phase = s; if (root) root.setAttribute('data-anim', s); }
+  function setRun(s) { if (s !== runState && root) { runState = s; root.setAttribute('data-run', s); } } // écrit seulement au changement
   function running() { return visible && !document.hidden; }
 
   function pinIcon(cls) {
@@ -73,9 +74,9 @@
     pill = L.DomUtil.create('div', 'fd-pill', container);
     pill.innerHTML = PIN_SVG + '<span class="fd-pill-t"></span>';
 
-    map.on('zoomend moveend', function () { buildPath(); if (phase === 'static') placeStatic(); });
+    map.on('moveend', function () { buildPath(); if (phase === 'static') placeStatic(); }); // tout zoom se termine aussi par moveend
 
-    var io = new IntersectionObserver(function (es) { visible = es[0].isIntersecting; resumeOrPause(); }, { threshold: 0.05 });
+    var io = new IntersectionObserver(function (es) { visible = es[es.length - 1].isIntersecting; resumeOrPause(); }, { threshold: 0.05 });
     io.observe(container);
     document.addEventListener('visibilitychange', resumeOrPause);
   }
@@ -149,14 +150,15 @@
 
   /* ---------- Pastille distance / durée ---------- */
   function pillText(k) {
-    pill.lastChild.textContent = (info.km * k).toFixed(1).replace('.', ',') + ' km · ' + Math.round(info.min * k) + ' min';
+    var P = window.FDPricing;
+    pill.lastChild.textContent = P.fmtKm(info.km * k) + ' km · ' + Math.round(info.min * k) + ' min';
   }
 
   /* ---------- Boucle rAF unique, pilotée par la phase ---------- */
   function frame(now) {
     raf = 0;
-    if (!running()) { pausedAt = pausedAt || now; root.setAttribute('data-run', 'paused'); return; }
-    root.setAttribute('data-run', 'running');
+    if (!running()) { pausedAt = pausedAt || now; setRun('paused'); return; }
+    setRun('running');
     var t = now - t0;
     if (phase === 'draw') {
       revealSegments(easeInOut(Math.min(1, t / DRAW_MS)));
@@ -182,14 +184,13 @@
     } else {
       if (!pausedAt) pausedAt = performance.now();
       cancelAnimationFrame(raf); raf = 0;
-      root.setAttribute('data-run', 'paused');
+      setRun('paused');
     }
   }
 
   function arrive(now) {
     if (arrMarker) arrMarker.getElement().classList.add('on'); // d. arrivée + halo
     pill.classList.add('on');                                // e. pastille en verre + compteur
-    if (revealCb) revealCb(COUNT_MS);
     setState('count');
     t0 = now;
   }
@@ -219,7 +220,7 @@
     map.flyToBounds(bounds, { padding: [34, 34], duration: DRAW_MS / 1000, easeLinearity: 0.35 });
     setState('draw');
     t0 = performance.now();
-    pausedAt = 0;
+    pausedAt = running() ? 0 : t0; // carte hors écran ou onglet masqué : le tracé attendra d'être visible
     kick();
   }
 
@@ -236,15 +237,13 @@
     pill.classList.add('on');
     setState('static');
     placeStatic();
-    if (revealCb) revealCb(0);
   }
 
   window.FDMap = {
-    /* opts : { km, min, onFail(), onReveal(ms) } — onReveal lance le compteur du prix du récap. */
+    /* opts : { km, min, onFail() } */
     show: function (container, geometry, opts) {
       opts = opts || {};
       failCb = opts.onFail;
-      revealCb = opts.onReveal;
       ensureMap(container);
       map.invalidateSize();
       var my = ++token;

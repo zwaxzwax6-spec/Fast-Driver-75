@@ -374,11 +374,11 @@ test('ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization
 test('ORS : radiuses [-1,-1] envoyé, une seule nouvelle tentative, puis erreur propre', async () => {
   const realFetch = global.fetch;
   const bodies = [];
-  let fails = 1;
+  let fails = 1, failStatus = 503;
   const okResp = { ok: true, json: async () => ({ features: [{ geometry: { coordinates: [[2.4, 48.9], [2.41, 48.91]] }, properties: { summary: { distance: 2500, duration: 400 } } }] }) };
   global.fetch = async (url, opts) => {
     bodies.push(JSON.parse(opts.body));
-    if (fails-- > 0) return { ok: false, status: 404, text: async () => '' };
+    if (fails-- > 0) return { ok: false, status: failStatus, text: async () => '' };
     return okResp;
   };
   process.env.VERCEL_ENV = 'preview';
@@ -395,6 +395,11 @@ test('ORS : radiuses [-1,-1] envoyé, une seule nouvelle tentative, puis erreur 
     assert.equal(r.status, 503);
     assert.equal(r.json.price, undefined);
     assert.equal(bodies.length, 2);
+    // « aucun itinéraire » (404) : pas de nouvelle tentative inutile, erreur propre
+    bodies.length = 0; fails = 1; failStatus = 404;
+    r = await call(quote, { mode: 'course', from: { lon: 2.403, lat: 48.903 }, to: { lon: 2.56, lat: 49.01 } });
+    assert.equal(r.status, 503);
+    assert.equal(bodies.length, 1);
   } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
 });
 
