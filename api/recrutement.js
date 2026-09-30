@@ -26,12 +26,12 @@ module.exports = http.postHandler(async function (body, req) {
     ['Prénom', d.prenom],
     ['Téléphone', d.tel],
     ['E-mail', d.email],
-    ['Véhicule possédé', d.vehicule_modele + ' · ' + d.vehicule_cylindree],
-    ['Expérience professionnelle', d.experience_pro],
-    ['Expérience taxi-moto / transport / livraison / course', d.experience_secteur],
+    ['Véhicule (modèle · cylindrée)', d.vehicule_modele + ' · ' + d.vehicule_cylindree],
+    ['Expérience pro', d.experience_pro],
+    ['Expérience terrain (taxi-moto, VTC, coursier, livraison)', d.experience_secteur],
     ['Motivations', d.motivations],
     ['Disponibilité', d.disponibilite],
-    ['Disponibilités / horaires', d.horaires]
+    ['Disponibilités (jours, horaires)', d.horaires]
   ];
 
   http.checkLimit(req, 'recrutement', http.FORM_LIMIT);

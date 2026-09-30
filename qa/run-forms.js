@@ -158,4 +158,5 @@ async function fabCheck(p, sel) {
   fs.writeFileSync(path.join(OUT, 'forms-report.md'), md);
   fs.writeFileSync(path.join(OUT, 'forms-report.json'), JSON.stringify(res, null, 1));
   lines.forEach(l => console.log(l));
+  if (Object.values(res).some(r => !r.pass)) process.exitCode = 1;
 })();

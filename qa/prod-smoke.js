@@ -1,5 +1,7 @@
 const { chromium, devices } = require('playwright');
-const OUT = '../test-output/qa/prod-smoke/';
+const path = require('path');
+const OUT = path.join(__dirname, '..', 'test-output', 'qa', 'prod-smoke') + path.sep;
+require('fs').mkdirSync(OUT, { recursive: true });
 const PROD = 'https://fast-driver-75.fr';
 async function pick(p, sel, q, re) {
   await p.fill(sel, ''); await p.type(sel, q, { delay: 15 }); await p.waitForSelector(sel + '-list .ac-item', { timeout: 15000 });
@@ -28,7 +30,7 @@ async function pick(p, sel, q, re) {
     await p.waitForTimeout(1500);
     const meta = (await p.innerText('#route-meta')).replace(/\s+/g, ' ');
     const price = await p.innerText('#q-total');
-    const motoVisible = await p.evaluate(() => +getComputedStyle(document.querySelector('.fd-moto')).opacity > 0.5 || true);
+    const motoVisible = await p.waitForFunction(() => +getComputedStyle(document.querySelector('.fd-moto')).opacity > 0.5, null, { timeout: 6000 }).then(() => true, () => false);
     await p.locator('#resa-card').screenshot({ path: OUT + `prod-calculateur-cdg-t2e-${w}.png` });
     await p.waitForTimeout(3000);
     await p.goto(PROD + '/recrutement', { waitUntil: 'networkidle' });
@@ -36,7 +38,7 @@ async function pick(p, sel, q, re) {
     await p.screenshot({ path: OUT + `prod-recrutement-${w}.png` });
     res[w] = { meta, price, motoVisible, errors: errs, formRequests: forms.length };
     await p.close();
-    require('fs').renameSync(await p.video().path(), OUT + `prod-animation-${w}.webm`);
+    await p.video().saveAs(OUT + `prod-animation-${w}.webm`); // sûr une fois la page fermée
     await ctx.close();
   }
   const st = async u => (await fetch(PROD + u, { redirect: 'follow' })).status;
