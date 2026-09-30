@@ -4,7 +4,8 @@
    → test-output/qa/preview-iter-N/{report.md,report.json,*.png,*.webm} */
 'use strict';
 const { chromium, devices } = require('playwright');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
+const execP = (cmd, opts) => new Promise((ok, ko) => exec(cmd, opts, e => e ? ko(e) : ok()));
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -65,7 +66,7 @@ async function mailsSince(since, marker) {
     let d = detailCache.get(e.id);
     if (!d || d.last_event !== 'delivered') { d = await resend('/emails/' + e.id); detailCache.set(e.id, d); }
     const blob = [d.subject, (d.to || []).join(','), d.html, d.text].join('\n');
-    if (!marker || blob.includes(marker)) out.push(d);
+    if (!marker || blob.toLowerCase().includes(marker.toLowerCase())) out.push(d);
   }
   return out;
 }
@@ -425,6 +426,7 @@ function proxy(port, target, withToken) {
       const alertTxt = await p.innerText('#q-alert');
       await p.fill('#f-date', parisDate(3)); await p.fill('#f-time', '10:00');
       await fillContact(p, 'c', clientMail('orsko'));
+      await p.fill('#c-nom', 'Martin ' + RUN + '-ORS');
       await sleep(3000);
       await p.locator('#resa-card').screenshot({ path: shot('C18-ors-erreur-390.png') });
       await p.click('#resa-go');
@@ -583,20 +585,21 @@ function proxy(port, target, withToken) {
     {
       const px1 = proxy(4191, LIVE, false), px2 = proxy(4192, BASE, true);
       const chrome = chromium.executablePath();
-      const lh = (url, tag) => {
+      const lh = async (url, tag) => {
         const scores = [];
         for (let i = 0; i < 3; i++) {
           const f = shot(`lh-${tag}-${i}.json`);
           try {
-            execSync(`lighthouse ${JSON.stringify(url)} --quiet --only-categories=performance --form-factor=mobile --output=json --output-path=${JSON.stringify(f)} --chrome-flags="--headless=new --no-sandbox"`, { env: { ...process.env, CHROME_PATH: chrome }, stdio: 'ignore', timeout: 180000 });
+            // exec asynchrone : le proxy local tourne dans ce même processus et doit pouvoir répondre.
+            await execP(`lighthouse ${JSON.stringify(url)} --quiet --only-categories=performance --form-factor=mobile --output=json --output-path=${JSON.stringify(f)} --chrome-flags="--headless=new --no-sandbox"`, { env: { ...process.env, CHROME_PATH: chrome }, timeout: 180000 });
             scores.push(Math.round(JSON.parse(fs.readFileSync(f, 'utf8')).categories.performance.score * 100));
           } catch (e) { }
         }
         scores.sort((a, b) => a - b);
         return { scores, median: scores[Math.floor(scores.length / 2)] };
       };
-      const before = lh('http://127.0.0.1:4191/', 'avant-en-ligne');
-      const after = lh('http://127.0.0.1:4192/', 'apres-preview');
+      const before = await lh('http://127.0.0.1:4191/', 'avant-en-ligne');
+      const after = await lh('http://127.0.0.1:4192/', 'apres-preview');
       px1.close(); px2.close();
       const net = results._net;
       record('C16', after.median >= before.median - 5 && net.leafletBefore === 0 && net.leafletAfter > 0,
