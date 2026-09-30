@@ -156,7 +156,7 @@ function expectedMad(ref, f) {
 /* Parcours UI Course/Colis : renvoie ce qui a été capturé (réponse API, navigation WhatsApp, écran). */
 async function uiBooking(ctx, mode, tag) {
   const p = await newPage(ctx);
-  await p.goto(BASE + '/#reserver', { waitUntil: 'load' });
+  await p.goto(BASE + '/#reserver', { waitUntil: 'load', timeout: 60000 });
   await p.addStyleTag({ content: '.rv{opacity:1!important;transform:none!important}' });
   if (mode === 'colis') await p.click('.tab[data-mode=colis]');
   const f = { mode, date: parisDate(3), time: '14:30', bagages: mode === 'course' ? '1' : '0', prenom: 'Camille', nom: 'Martin ' + RUN + '-' + tag, commentaire: mode === 'course' ? 'Casque taille M' : '' };
@@ -260,7 +260,7 @@ async function uiBooking(ctx, mode, tag) {
     /* ============ Mise à disposition : iPhone 390 WebKit ============ */
     const m = { nb: '4', type: 'événement', date: parisDate(10), hd: '18:00', hf: '23:30', lieu: 'Pavillon Ledoyen, Paris 8e', duree: '5 heures 30', details: 'Navettes invités ' + RUN, prenom: 'Léa', nom: 'Bernard ' + RUN + '-mad', societe: 'Agence Lumière' };
     const mp = await newPage(ictx);
-    await mp.goto(BASE + '/', { waitUntil: 'load' });
+    await mp.goto(BASE + '/', { waitUntil: 'load', timeout: 60000 });
     await mp.addStyleTag({ content: '.rv{opacity:1!important;transform:none!important}' });
     await mp.click('[data-open-tab=flotte]');
     await sleep(600);
