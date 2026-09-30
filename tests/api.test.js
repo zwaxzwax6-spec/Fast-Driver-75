@@ -655,3 +655,13 @@ test('mock : clé d’idempotence expirée après 24 h, comme chez Resend', asyn
   t.mock.timers.setTime(Date.parse('2026-10-11T10:01:00Z'));
   await mail.sendMail({ subject: 'c', html: 'c', text: 'c', idempotencyKey: 'fd-ref-FD-TEST' });
 });
+
+test('Resend : clé révoquée ou domaine refusé (401/403/422) = erreur de configuration → 503 visible', async () => {
+  for (const status of [401, 403, 422]) {
+    await onVercel(async () => {
+      fakeNet(() => reply(status, { message: 'nope' }));
+      const r = await call(booking, base());
+      assert.equal(r.status, 503, status + ' ' + JSON.stringify(r.json));
+    });
+  }
+});
