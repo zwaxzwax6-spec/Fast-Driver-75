@@ -4,8 +4,8 @@
   'use strict';
 
   var card = document.getElementById('resa-card');
-  if (!card || !window.FD || !window.FDPricing) return;
-  var FD = window.FD, P = window.FDPricing;
+  if (!card || !window.FD || !window.FDPricing || !window.FDWhatsApp) return;
+  var FD = window.FD, P = window.FDPricing, W = window.FDWhatsApp;
 
   var LEAFLET = {
     css: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
@@ -13,7 +13,6 @@
     js: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
     jsSri: 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=='
   };
-  var WA = 'https://wa.me/33766139850';
 
   var $ = function (id) { return document.getElementById(id); };
   var tabs = card.querySelectorAll('.tab');
@@ -278,29 +277,34 @@
   }
 
   function showBookingDone(data, res) {
-    var when = res.when || data.date + ' ' + data.time;
-    var priceText = res.price ? res.price.totalText : 'à confirmer';
-    $('done-title').textContent = 'Demande envoyée';
-    $('done-text').textContent = 'Merci ' + data.prenom + '. Fast Driver vous confirme votre ' +
-      (data.mode === 'colis' ? 'livraison' : 'course') + ' et le tarif définitif très vite.';
-    var rows = [['Départ', res.from || data.from], ['Arrivée', res.to || data.to], ['Prise en charge', when]];
+    var rows = [['Départ', res.from || data.from], ['Arrivée', res.to || data.to], ['Prise en charge', res.when || data.date + ' ' + data.time]];
     if (data.mode === 'course') rows.push(['Bagages', data.bagages]);
-    $('done-box').innerHTML = recapRows(rows) +
-      '<div class="q-total"><span>Prix estimatif</span><b>' + FD.esc(priceText) + '</b></div>';
-    $('done-box').hidden = false;
-    var lines = [
-      'Bonjour Fast Driver,',
-      'Je viens d’envoyer une demande ' + (data.mode === 'colis' ? 'de livraison de colis' : 'de course taxi moto') + ' depuis le site :',
-      '- Départ : ' + (res.from || data.from),
-      '- Arrivée : ' + (res.to || data.to),
-      '- Quand : ' + when
-    ];
-    if (data.mode === 'course') lines.push('- Bagages : ' + data.bagages);
-    lines.push('- Prix estimatif : ' + priceText.replace(' ', ' '), '- Nom : ' + data.prenom + ' ' + data.nom, 'Merci !');
-    var wa = $('done-wa');
-    wa.href = WA + '?text=' + encodeURIComponent(lines.join('\n'));
-    wa.hidden = false;
+    var priceText = res.price ? res.price.totalText : 'à confirmer';
+    showDone(res, recapRows(rows) + '<div class="q-total"><span>Prix estimatif</span><b>' + FD.esc(priceText) + '</b></div>');
+  }
+
+  /* Écran « Dernière étape » puis ouverture de WhatsApp avec le message construit par le serveur.
+     window.location.href et non window.open : après un appel réseau, iOS bloque les fenêtres surgissantes.
+     Le bouton « Ouvrir WhatsApp » (vrai lien, clic de l'utilisateur) relance le même lien si besoin. */
+  function showDone(res, recap) {
+    var wa = $('done-wa'), ico = done.querySelector('.done-ico');
+    var url = res.whatsapp && res.whatsapp.text ? W.link(res.whatsapp.text, W.isDesktop(navigator)) : '';
+    ico.classList.toggle('wa', !!url);
+    $('done-box').innerHTML = recap || '';
+    $('done-box').hidden = !recap || !url;
+    if (url) {
+      $('done-title').textContent = 'Dernière étape';
+      $('done-text').innerHTML = 'Envoyez le message WhatsApp qui vient de s’ouvrir.<br>Fast Driver vous confirme ensuite votre réservation.' +
+        '<span class="done-ref">Réservation ' + FD.esc(res.ref) + '</span>';
+      wa.href = url;
+      wa.hidden = false;
+    } else {
+      $('done-title').textContent = 'Demande envoyée';
+      $('done-text').textContent = 'Merci, Fast Driver revient vers vous très vite.';
+      wa.hidden = true;
+    }
     openDone();
+    if (url) window.location.href = url;
   }
 
   /* ---------- Envoi Plusieurs véhicules ---------- */
@@ -318,11 +322,10 @@
     FD.post('/api/mise-a-disposition', data).then(function (r) {
       busy(mad, false);
       if (r.status === 200 && r.json.ok) {
-        $('done-title').textContent = 'Demande envoyée';
-        $('done-text').textContent = 'Nous revenons vers vous avec un devis personnalisé.';
-        $('done-box').hidden = true;
-        $('done-wa').hidden = true;
-        return openDone();
+        return showDone(r.json, r.json.ref ? recapRows([
+          ['Véhicules', data.nb_vehicules], ['Date', data.date.split('-').reverse().join('/')],
+          ['Horaires', data.heure_debut.replace(':', 'h') + ' – ' + data.heure_fin.replace(':', 'h')]
+        ]) : '');
       }
       if (r.json && r.json.errors) return FD.showErrors(mad, r.json.errors, r.json.error);
       mad.querySelector('.form-err').textContent = (r.json && r.json.error) || 'Envoi impossible pour le moment. Réessayez dans un instant.';

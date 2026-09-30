@@ -184,7 +184,7 @@ test('C7m mise à disposition : sujet « N véhicules le JJ/MM », tous les cham
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const m = mails()[0];
   const [, mm, dd] = date.split('-');
-  assert.equal(m.subject, `[Mise à dispo] Demande de devis : 4 véhicules le ${dd}/${mm}`);
+  assert.match(m.subject, new RegExp(`^\\[Mise à dispo\\] FD-[0-9A-Z]{4} · Demande de devis : 4 véhicules le ${dd}/${mm}$`));
   assert.equal(m.reply_to, 'lea@societe.fr');
   for (const v of ['Parc des Expositions', '5 heures 30', 'événement', 'Navette invités', 'Léa', 'Bernard', 'Société X', '18h00', '23h30']) {
     assert.ok(m.html.includes(v) && m.text.includes(v), v);
@@ -413,4 +413,119 @@ test('destination pré-réglée : coordonnées OSM utilisées, aucun géocodage'
   assert.equal(geoCalls - before, 1, 'seul le départ est géocodé');
   assert.equal(r.json.to, t2e.label);
   assert.ok(mails()[0].text.includes('Aéroport CDG – Terminal 2E'));
+});
+
+/* ---------- Réservation via WhatsApp (W1, W2, W4) ---------- */
+const WA = require(path.join(ROOT, 'assets/whatsapp.js'));
+const REF_RE = /^FD-[0-9A-HJKMNP-TV-Z]{4}$/;
+const decoded = (r) => {
+  const u = new URL(r.json.whatsapp.url);
+  assert.equal(u.origin + u.pathname, 'https://wa.me/33766139850');
+  assert.equal(WA.link(r.json.whatsapp.text, false), r.json.whatsapp.url);
+  return u.searchParams.get('text');
+};
+const wabody = (o) => ({ ...base(), date: '2026-10-12', time: '14:30', ...o });
+
+test('W1 course : lien wa.me décodé = texte attendu exact', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  clearMails();
+  const r = await call(booking, wabody());
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.match(r.json.ref, REF_RE);
+  assert.equal(decoded(r), [
+    'Bonjour Fast Driver, je souhaite réserver :',
+    'Réservation ' + r.json.ref,
+    'Service : Course',
+    'Départ : 160 Rue de Rivoli 75001 Paris',
+    'Arrivée : 300 Rue de Vaugirard 75015 Paris',
+    'Date : 12/10/2026 à 14h30',
+    'Bagages : 1',
+    'Distance : 5,8 km · Prix estimatif : 35,00\u00a0€',
+    'Nom : Camille Martin · Tél : 06 12 34 56 78',
+    'Commentaire : Casque taille M'
+  ].join('\n'));
+});
+
+test('W1 colis : lien wa.me décodé = texte attendu exact (sans bagages, sans commentaire vide)', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  clearMails();
+  const r = await call(booking, wabody({ mode: 'colis', bagages: '3', commentaire: '  ' }));
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(decoded(r), [
+    'Bonjour Fast Driver, je souhaite réserver :',
+    'Réservation ' + r.json.ref,
+    'Service : Colis',
+    'Départ : 160 Rue de Rivoli 75001 Paris',
+    'Arrivée : 300 Rue de Vaugirard 75015 Paris',
+    'Date : 12/10/2026 à 14h30',
+    'Distance : 5,8 km · Prix estimatif : 30,00\u00a0€',
+    'Nom : Camille Martin · Tél : 06 12 34 56 78'
+  ].join('\n'));
+});
+
+test('W1 mise à disposition : lien wa.me décodé = texte attendu exact', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  clearMails();
+  const r = await call(mad, {
+    elapsed: 10000, website: '', nb_vehicules: '4', date: '2026-10-20', heure_debut: '18:00', heure_fin: '23:30',
+    lieu: 'Parc des Expositions, Paris 15e', duree: '5 heures 30', type: 'événement', details: 'Navette invités\ndepuis la gare',
+    prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr', societe: 'Société X'
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.match(r.json.ref, REF_RE);
+  assert.equal(decoded(r), [
+    'Bonjour Fast Driver, je souhaite réserver :',
+    'Réservation ' + r.json.ref,
+    'Service : Mise à disposition',
+    'Nombre de véhicules : 4',
+    'Date : 20/10/2026',
+    'Horaires : de 18h00 à 23h30',
+    'Lieu : Parc des Expositions, Paris 15e',
+    'Durée : 5 heures 30',
+    'Type de prestation : événement',
+    'Société : Société X',
+    'Nom : Léa Bernard · Tél : 06 12 34 56 78',
+    'Commentaire : Navette invités depuis la gare'
+  ].join('\n'));
+  // W4 : même numéro dans le sujet de l'e-mail de sauvegarde
+  const m = mails();
+  assert.equal(m.length, 1);
+  assert.equal(m[0].subject, '[Mise à dispo] ' + r.json.ref + ' · Demande de devis : 4 véhicules le 20/10');
+  assert.ok(m[0].text.includes(r.json.ref) && m[0].html.includes(r.json.ref));
+});
+
+test('W2 prix falsifié par le navigateur : le message WhatsApp porte le prix recalculé', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
+  clearMails();
+  const r = await call(booking, wabody({ price: 1, total: 1, totalText: '1,00 €', km: 0.1, distanceKm: 0.1 }));
+  assert.equal(r.status, 200);
+  const text = decoded(r);
+  assert.match(text, /Distance : 5,8 km · Prix estimatif : 35,00\u00a0€/);
+  assert.doesNotMatch(text, /[^5]1,00|0,1 km/);
+});
+
+test('W4 course : même numéro FD-XXXX dans le sujet de l’e-mail de sauvegarde', async () => {
+  clearMails();
+  const r = await call(booking, base());
+  const m = mails();
+  assert.equal(m.length, 1);
+  assert.match(m[0].subject, new RegExp('^\\[Course\\] ' + r.json.ref + ' · '));
+  assert.ok(m[0].text.includes(r.json.ref));
+});
+
+test('WhatsApp : prix indisponible → « à confirmer », jamais de faux prix', async () => {
+  const realFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, json: async () => ({}) });
+  clearMails();
+  try {
+    const r = await call(booking, base());
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.match(decoded(r), /\nDistance : à confirmer · Prix estimatif : à confirmer\n/);
+  } finally { global.fetch = realFetch; }
+});
+
+test('WhatsApp : numéros différents pour deux demandes successives', async () => {
+  const a = await call(booking, base());
+  const b = await call(booking, base());
+  assert.notEqual(a.json.ref, b.json.ref);
 });

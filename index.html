@@ -293,6 +293,11 @@ footer{color:rgba(255,255,255,.72)}
 .done[hidden]{display:none}
 .done-ico{width:58px;height:58px;border-radius:50%;background:var(--noir);display:flex;align-items:center;justify-content:center;margin:0 auto}
 .done-ico svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.done-ico .ico-wa{width:30px;height:30px;fill:#fff;stroke:none}
+.done-ico .ico-wa,.done-ico.wa .ico-ok{display:none}
+.done-ico.wa{background:#25D366}
+.done-ico.wa .ico-wa{display:block}
+.done .done-ref{display:block;margin-top:4px;font-weight:700;color:var(--noir);letter-spacing:.04em}
 .done h3{margin-top:16px;font-size:1.4rem;font-weight:800}
 .done p{margin-top:8px;font-size:.9rem;color:var(--taupe-2);line-height:1.55}
 .done .q-box{text-align:left}
@@ -393,7 +398,7 @@ footer{color:rgba(255,255,255,.72)}
     <div class="rv">
       <div class="kicker">R&eacute;servation</div>
       <h2 class="s-title">R&eacute;servez votre course<br>en 30 secondes.</h2>
-      <p class="s-sub">Renseignez votre trajet : le prix s'affiche directement. Envoyez votre demande en un clic, Fast Driver vous confirme votre course.</p>
+      <p class="s-sub">Renseignez votre trajet : le prix s'affiche directement, avant de r&eacute;server. Un clic sur &laquo;&nbsp;R&eacute;server via WhatsApp&nbsp;&raquo; ouvre WhatsApp avec votre r&eacute;servation d&eacute;j&agrave; r&eacute;dig&eacute;e&nbsp;: envoyez le message, Fast Driver vous confirme votre course.</p>
     </div>
     <div class="resa-card rv" id="resa-card" data-fab-avoid>
       <div class="tabs" role="tablist" aria-label="Type de demande">
@@ -439,7 +444,7 @@ footer{color:rgba(255,255,255,.72)}
           <div class="field" data-field="email"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" maxlength="120" required><p class="f-err"></p></div>
         </div>
         <div class="field" data-field="commentaire"><label for="c-com">Commentaire <span class="opt">(optionnel)</span></label><textarea id="c-com" name="commentaire" rows="2" maxlength="1000"></textarea><p class="f-err"></p></div>
-        <button class="btn resa-btn" type="submit" id="resa-go">Envoyer ma demande <svg viewBox="0 0 24 24"><path d="M5 12h12m0 0-5-5m5 5-5 5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn resa-btn" type="submit" id="resa-go"><svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.07-.12-.27-.2-.57-.35M12.05 21.79h-.01c-1.77 0-3.51-.48-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.43-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.29A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.31-1.65a11.88 11.88 0 0 0 5.68 1.44h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.16-3.49-8.4"/></svg>R&eacute;server via WhatsApp</button>
         <p class="form-err" role="alert"></p>
       </form>
 
@@ -466,17 +471,17 @@ footer{color:rgba(255,255,255,.72)}
           <div class="field" data-field="email"><label for="m-email">E-mail</label><input id="m-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" maxlength="120" required><p class="f-err"></p></div>
         </div>
         <div class="field" data-field="societe"><label for="m-soc">Soci&eacute;t&eacute; <span class="opt">(optionnel)</span></label><input id="m-soc" name="societe" type="text" autocomplete="organization" maxlength="120"><p class="f-err"></p></div>
-        <button class="btn resa-btn" type="submit">Demander un devis <svg viewBox="0 0 24 24"><path d="M5 12h12m0 0-5-5m5 5-5 5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn resa-btn" type="submit" id="mad-go"><svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.07-.12-.27-.2-.57-.35M12.05 21.79h-.01c-1.77 0-3.51-.48-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.43-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.29A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.31-1.65a11.88 11.88 0 0 0 5.68 1.44h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.16-3.49-8.4"/></svg>R&eacute;server via WhatsApp</button>
         <p class="form-err" role="alert"></p>
       </form>
 
       <div class="done" id="done" hidden tabindex="-1">
-        <div class="done-ico"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
+        <div class="done-ico"><svg class="ico-ok" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><svg class="ico-wa" viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.07-.12-.27-.2-.57-.35M12.05 21.79h-.01c-1.77 0-3.51-.48-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.43-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.29A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.31-1.65a11.88 11.88 0 0 0 5.68 1.44h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.16-3.49-8.4"/></svg></div>
         <h3 id="done-title">Demande envoy&eacute;e</h3>
         <p id="done-text"></p>
         <div class="q-box" id="done-box" hidden></div>
         <div class="done-acts">
-          <a class="btn btn-wa" id="done-wa" href="https://wa.me/33766139850" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.07-.12-.27-.2-.57-.35M12.05 21.79h-.01c-1.77 0-3.51-.48-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.43-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.29A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.31-1.65a11.88 11.88 0 0 0 5.68 1.44h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.16-3.49-8.4"/></svg>Envoyer aussi sur WhatsApp</a>
+          <a class="btn btn-wa" id="done-wa" href="https://wa.me/33766139850" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.07-.12-.27-.2-.57-.35M12.05 21.79h-.01c-1.77 0-3.51-.48-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.43-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.29A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.31-1.65a11.88 11.88 0 0 0 5.68 1.44h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.16-3.49-8.4"/></svg>Ouvrir WhatsApp</a>
           <button class="btn btn-line" type="button" id="done-new">Nouvelle demande</button>
         </div>
       </div>
@@ -617,7 +622,7 @@ footer{color:rgba(255,255,255,.72)}
     <div class="faq-list rv">
       <div class="faq-item">
         <button class="faq-q">Comment je r&eacute;serve ma course ?<span class="pl">+</span></button>
-        <div class="faq-a"><p>Avec le calculateur en haut de page : choisissez Course ou Colis, vos adresses de d&eacute;part et d'arriv&eacute;e, la date et l'heure. Le prix s'affiche directement. Envoyez votre demande : elle nous arrive par e-mail et Fast Driver vous confirme le tarif d&eacute;finitif. Si vous pr&eacute;f&eacute;rez, vous pouvez aussi nous &eacute;crire sur WhatsApp au 07 66 13 98 50.</p></div>
+        <div class="faq-a"><p>Avec le calculateur en haut de page : choisissez Course ou Colis, vos adresses de d&eacute;part et d'arriv&eacute;e, la date et l'heure. Le prix s'affiche directement, avant de r&eacute;server. Cliquez sur &laquo;&nbsp;R&eacute;server via WhatsApp&nbsp;&raquo; : WhatsApp s'ouvre avec votre r&eacute;servation d&eacute;j&agrave; r&eacute;dig&eacute;e (num&eacute;ro FD, trajet, date, prix). Il ne vous reste qu'&agrave; envoyer le message au 07 66 13 98 50, et Fast Driver vous confirme votre course. Pour plusieurs v&eacute;hicules, utilisez l'onglet &laquo;&nbsp;Plusieurs v&eacute;hicules&nbsp;&raquo;, qui fonctionne de la m&ecirc;me fa&ccedil;on.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Combien &ccedil;a co&ucirc;te ?<span class="pl">+</span></button>
@@ -736,6 +741,7 @@ document.querySelectorAll('.faq-q').forEach(function(q){
 </script>
 <script src="/assets/pricing.js" defer></script>
 <script src="/assets/places.js" defer></script>
+<script src="/assets/whatsapp.js" defer></script>
 <script src="/assets/forms.js" defer></script>
 <script src="/assets/booking.js" defer></script>
 </body>

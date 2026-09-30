@@ -8,6 +8,8 @@ var geo = require('../lib/geo');
 var route = require('../lib/route');
 var T = require('../lib/templates');
 var notify = require('../lib/notify').notify;
+var Ref = require('../lib/reference');
+var W = require('../lib/whatsapp');
 
 var LABEL = { course: 'Course', colis: 'Colis' };
 
@@ -66,9 +68,11 @@ module.exports = http.postHandler(async function (body, req) {
 
   var when = V.frDateLong(d.date) + ' à ' + V.frTime(d.time);
   var name = d.prenom + ' ' + d.nom;
-  var subject = '[' + LABEL[d.mode] + '] ' + V.frDate(d.date) + ' à ' + V.frTime(d.time) + ' · ' + name + ' · ' +
+  var ref = Ref.createRef();
+  var subject = '[' + LABEL[d.mode] + '] ' + ref + ' · ' + V.frDate(d.date) + ' à ' + V.frTime(d.time) + ' · ' + name + ' · ' +
     (price ? P.fmtEur(price.total) : 'prix à confirmer');
   var rows = [
+    ['Réservation', ref],
     ['Type', d.mode === 'course' ? 'Course taxi moto (personne)' : 'Livraison de colis'],
     ['Départ', from],
     ['Arrivée', to],
@@ -83,9 +87,9 @@ module.exports = http.postHandler(async function (body, req) {
   await notify(req, {
     subject: subject,
     replyTo: d.email,
-    kicker: LABEL[d.mode] + ' · nouvelle demande',
+    kicker: LABEL[d.mode] + ' · ' + ref,
     title: (d.mode === 'course' ? 'Course' : 'Colis') + ' le ' + when,
-    intro: 'Demande envoyée depuis le calculateur du site. Prix recalculé par le serveur.',
+    intro: 'Demande envoyée depuis le calculateur du site. Le client est redirigé vers WhatsApp pour l’envoyer avec le numéro ' + ref + '. Prix recalculé par le serveur.',
     rows: rows,
     price: view,
     note: 'Prix estimatif. Le tarif définitif est à confirmer au client.',
@@ -102,7 +106,7 @@ module.exports = http.postHandler(async function (body, req) {
     title: 'Votre demande est bien reçue.',
     intro: 'Fast Driver vous confirme rapidement le tarif définitif.',
     // Adresses reprises seulement si elles viennent du géocodeur (jamais le texte brut saisi).
-    rows: rows.slice(0, 5).filter(function (r) { return verified || (r[0] !== 'Départ' && r[0] !== 'Arrivée'); }),
+    rows: rows.slice(0, 6).filter(function (r) { return verified || (r[0] !== 'Départ' && r[0] !== 'Arrivée'); }),
     price: view,
     note: 'Prix estimatif. Le tarif définitif vous est confirmé par Fast Driver.'
   });
@@ -111,7 +115,9 @@ module.exports = http.postHandler(async function (body, req) {
     body: {
       ok: true,
       price: price ? { total: price.total, totalText: P.fmtEur(price.total) } : null,
-      from: from, to: to, when: when
+      from: from, to: to, when: when,
+      ref: ref,
+      whatsapp: W.bookingMessage(ref, d, { from: from, to: to, bagages: bagages, route: routeInfo, price: price })
     }
   };
 });

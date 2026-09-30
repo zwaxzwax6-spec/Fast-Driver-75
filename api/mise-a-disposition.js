@@ -5,6 +5,8 @@ var http = require('../lib/http');
 var V = require('../lib/validate');
 var antispam = require('../lib/antispam');
 var notify = require('../lib/notify').notify;
+var Ref = require('../lib/reference');
+var W = require('../lib/whatsapp');
 
 var TYPES = ['événement', 'entreprise', 'groupe', 'autre'];
 
@@ -27,8 +29,10 @@ module.exports = http.postHandler(async function (body, req) {
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
   var d = v.data;
   var name = d.prenom + ' ' + d.nom;
-  var subject = '[Mise à dispo] Demande de devis : ' + d.nb_vehicules + ' véhicules le ' + V.frDate(d.date);
+  var ref = Ref.createRef();
+  var subject = '[Mise à dispo] ' + ref + ' · Demande de devis : ' + d.nb_vehicules + ' véhicules le ' + V.frDate(d.date);
   var rows = [
+    ['Réservation', ref],
     ['Nombre de véhicules', String(d.nb_vehicules)],
     ['Date', V.frDateLong(d.date)],
     ['Horaires', 'de ' + V.frTime(d.heure_debut) + ' à ' + V.frTime(d.heure_fin)],
@@ -46,9 +50,9 @@ module.exports = http.postHandler(async function (body, req) {
   await notify(req, {
     subject: subject,
     replyTo: d.email,
-    kicker: 'Mise à disposition',
+    kicker: 'Mise à disposition · ' + ref,
     title: 'Demande de devis : ' + d.nb_vehicules + ' véhicules le ' + V.frDateLong(d.date),
-    intro: 'Demande envoyée depuis l’onglet « Plusieurs véhicules » du site.',
+    intro: 'Demande envoyée depuis l’onglet « Plusieurs véhicules » du site. Le client est redirigé vers WhatsApp pour l’envoyer avec le numéro ' + ref + '.',
     rows: rows,
     buttons: [
       { label: 'Appeler', href: 'tel:' + V.telHref(d.tel) },
@@ -61,8 +65,8 @@ module.exports = http.postHandler(async function (body, req) {
     kicker: 'Demande reçue',
     title: 'Votre demande est bien reçue.',
     intro: 'Nous revenons vers vous avec un devis personnalisé.',
-    rows: [rows[0], rows[1], rows[2], rows[5]]
+    rows: [rows[0], rows[1], rows[2], rows[3], rows[6]]
   });
 
-  return { body: { ok: true } };
+  return { body: { ok: true, ref: ref, whatsapp: W.madMessage(ref, d) } };
 });

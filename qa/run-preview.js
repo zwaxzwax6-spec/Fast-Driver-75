@@ -115,8 +115,11 @@ async function newPage(browser, kind, extra = {}) {
     ? { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } }
     : { viewport: { width: kind, height: 900 }, deviceScaleFactor: 1 };
   const ctx = await browser.newContext({ ...base, locale: 'fr-FR', timezoneId: 'Europe/Paris', ...extra });
+  ctx.waNav = [];
   await ctx.route('**/*', route => {
     const req = route.request();
+    // Jamais de vraie conversation WhatsApp : toute navigation vers WhatsApp est notée puis bloquée.
+    if (/(^|\.)(wa\.me|whatsapp\.com)$/.test(new URL(req.url()).host)) { ctx.waNav.push(req.url()); return route.fulfill({ status: 204, body: '' }); }
     if (new URL(req.url()).host === HOST) return route.continue({ headers: { ...req.headers(), 'x-vercel-trusted-oidc-idp-token': TOKEN } });
     return route.fallback();
   });
@@ -808,7 +811,7 @@ function proxy(port, target, withToken) {
       const [, mo, da] = md.split('-');
       checks.push({ l: 'Course', m: course, ok: course && course.last_event === 'delivered' && rt(course) === clientMail('course') && has(course, ['Camille', '06 12 34 56 78', clientMail('course'), 'Casque taille M', '160 Rue de Rivoli 75001 Paris', '300 Rue de Vaugirard 75015 Paris', '14h30', 'google.com/maps/dir', 'tel:+33612345678']) && course.from === 'Fast Driver <reservation@fast-driver-75.fr>' });
       checks.push({ l: 'Colis', m: colis, ok: colis && colis.last_event === 'delivered' && rt(colis) === clientMail('colis') && !/Bagages/.test(colis.text) });
-      checks.push({ l: 'Mise à dispo', m: mad, ok: mad && mad.last_event === 'delivered' && mad.subject === `[Mise à dispo] Demande de devis : 4 véhicules le ${da}/${mo}` && rt(mad) === clientMail('mad') && has(mad, ['événement', 'Pavillon Ledoyen, Paris 8e', '5 heures 30', 'Navettes invités', '18h00', '23h30', 'Agence Lumière']) && results._madDone === 'Nous revenons vers vous avec un devis personnalisé.' });
+      checks.push({ l: 'Mise à dispo', m: mad, ok: mad && mad.last_event === 'delivered' && new RegExp(`^\\[Mise à dispo\\] FD-[0-9A-Z]{4} · Demande de devis : 4 véhicules le ${da}/${mo}$`).test(mad.subject) && rt(mad) === clientMail('mad') && has(mad, ['événement', 'Pavillon Ledoyen, Paris 8e', '5 heures 30', 'Navettes invités', '18h00', '23h30', 'Agence Lumière']) && /^Envoyez le message WhatsApp qui vient de s’ouvrir\./.test(results._madDone) });
       const rv = results._rec || {};
       checks.push({ l: 'Candidature', m: rec, ok: rec && rec.last_event === 'delivered' && rt(rec) === clientMail('rec') && has(rec, ['Diallo', 'Honda Forza 750', '750 cm3', '6 ans de coursier express', 'Taxi moto 2 ans', 'Rouler dans Paris', 'temps partiel', 'Soirs et week-ends']) });
       const confTags = ['course', 'colis', 'mad', 'rec'];
