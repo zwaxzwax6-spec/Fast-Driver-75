@@ -285,6 +285,7 @@ footer{color:rgba(255,255,255,.72)}
 .q-note{margin-top:8px;font-size:.76rem;color:var(--taupe-2)}
 .q-alert{margin:0 0 12px;padding:12px 14px;border-radius:var(--r-sm);background:#FFF6F5;border:1px solid rgba(210,75,63,.35);color:#8E2D25;font-size:.84rem;font-weight:600;line-height:1.45}
 .q-alert[hidden]{display:none}
+.f-bag-soute{margin:8px 0 0}
 .q-wait{font-size:.84rem;color:var(--taupe-2);padding:6px 0}
 .form-err{margin-top:10px;font-size:.84rem;font-weight:600;color:#B23A30;text-align:center}
 .form-err:empty{display:none}
@@ -352,8 +353,7 @@ footer{color:rgba(255,255,255,.72)}
     <a href="/recrutement">On recrute</a>
   </div>
   <a class="nav-jobs" href="/recrutement">On recrute</a>
-  <a class="nav-cta" href="https://wa.me/33766139850" target="_blank" rel="noopener">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-wa"/></svg>
+  <a class="nav-cta" href="#reserver" data-appli="">
     R&eacute;server
   </a>
 </nav>
@@ -400,7 +400,7 @@ footer{color:rgba(255,255,255,.72)}
     <div class="rv">
       <div class="kicker">R&eacute;servation</div>
       <h2 class="s-title">R&eacute;servez votre course<br>en 30 secondes.</h2>
-      <p class="s-sub">Renseignez votre trajet : le prix s'affiche avant de r&eacute;server. R&eacute;servez via WhatsApp, votre message est d&eacute;j&agrave; r&eacute;dig&eacute;.</p>
+      <p class="s-sub">Renseignez votre trajet : le prix s'affiche avant de r&eacute;server. R&eacute;servez et payez dans l'appli, votre trajet est d&eacute;j&agrave; rempli.</p>
     </div>
     <div class="resa-card rv" id="resa-card" data-fab-avoid>
       <div class="tabs" role="tablist" aria-label="Type de demande">
@@ -421,8 +421,9 @@ footer{color:rgba(255,255,255,.72)}
           <div class="field" data-field="date"><label for="f-date">Date</label><input id="f-date" name="date" type="date" required><p class="f-err"></p></div>
           <div class="field" data-field="time"><label for="f-time">Heure</label><input id="f-time" name="time" type="time" step="300" required><p class="f-err"></p></div>
         </div>
-        <div class="field" data-field="bagages" id="f-bag-wrap"><label for="f-bag">Bagages <span class="opt" id="f-bag-price">(+5&nbsp;&euro; par bagage)</span></label>
-          <select id="f-bag" name="bagages"><option value="0">Aucun bagage</option><option value="1">1 bagage</option><option value="2">2 bagages</option><option value="3">3 bagages</option></select><p class="f-err"></p></div>
+        <div class="field" data-field="bagages" id="f-bag-wrap"><label for="f-bag">Bagages <span class="opt" id="f-bag-price">(+<span data-tarif="bagage">5</span>&nbsp;&euro; le sac ou la valise cabine)</span></label>
+          <select id="f-bag" name="bagage"><option value="aucun">Aucun</option><option value="sac">Sac</option><option value="cabine">Cabine</option><option value="soute">Soute</option></select><p class="f-err"></p>
+          <p class="q-alert f-bag-soute" id="f-bag-soute" role="status" hidden>Il faut un v&eacute;hicule de plus. Le prix couvre la moto. On vous appelle pour le v&eacute;hicule et son tarif.</p></div>
 
         <p class="q-alert" id="q-alert" role="alert" hidden></p>
         <div class="quote" id="quote" hidden>
@@ -431,22 +432,13 @@ footer{color:rgba(255,255,255,.72)}
           <div class="q-wait" id="q-wait" hidden>Calcul du prix&hellip;</div>
           <div class="q-box" id="q-box" hidden>
             <div id="q-lines"></div>
-            <div class="q-total"><span>Prix estimatif</span><b id="q-total"></b></div>
+            <div class="q-total"><span>Prix fixe</span><b id="q-total"></b></div>
           </div>
           <span class="sr-only" id="q-live" aria-live="polite"></span>
-          <p class="q-note" id="q-note" hidden>Prix estimatif. Le tarif d&eacute;finitif vous est confirm&eacute; par Fast Driver.</p>
+          <p class="q-note" id="q-note" hidden>Prix fixe &middot; d&eacute;bit&eacute; &agrave; la fin de la course.</p>
         </div>
 
-        <div class="row2 keep">
-          <div class="field" data-field="prenom"><label for="c-prenom">Pr&eacute;nom</label><input id="c-prenom" name="prenom" type="text" autocomplete="given-name" maxlength="60" required><p class="f-err"></p></div>
-          <div class="field" data-field="nom"><label for="c-nom">Nom</label><input id="c-nom" name="nom" type="text" autocomplete="family-name" maxlength="60" required><p class="f-err"></p></div>
-        </div>
-        <div class="row2">
-          <div class="field" data-field="tel"><label for="c-tel">T&eacute;l&eacute;phone</label><input id="c-tel" name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" maxlength="25" required><p class="f-err"></p></div>
-          <div class="field" data-field="email"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" maxlength="120" required><p class="f-err"></p></div>
-        </div>
-        <div class="field" data-field="commentaire"><label for="c-com">Commentaire <span class="opt">(optionnel)</span></label><textarea id="c-com" name="commentaire" rows="2" maxlength="1000"></textarea><p class="f-err"></p></div>
-        <button class="btn resa-btn" type="submit" id="resa-go"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-wa"/></svg>R&eacute;server via WhatsApp</button>
+        <button class="btn resa-btn" type="submit" id="resa-go">R&eacute;server</button>
         <p class="form-err" role="alert"></p>
       </form>
 
@@ -502,25 +494,25 @@ footer{color:rgba(255,255,255,.72)}
     <div class="ledger rv">
       <div class="l-row">
         <div class="l-ico"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 12c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5z"/></svg></div>
-        <div class="l-lab"><b>Taxi moto</b><span>Transport de personnes &mdash; 8h00 – 00h00, 7j/7</span></div>
+        <div class="l-lab"><b>Taxi moto</b><span>Transport de personnes &mdash; <span data-horaires="plage">8h00 – 00h00</span>, 7j/7</span></div>
         <div class="l-dots"></div>
-        <div class="l-price">2&nbsp;&euro; <small>/ km</small></div>
+        <div class="l-price"><span data-tarif="km-course">2</span>&nbsp;&euro; <small>/ km</small></div>
       </div>
       <div class="l-row">
         <div class="l-ico"><svg viewBox="0 0 24 24"><path d="M21 8.5 12 3 3 8.5v7L12 21l9-5.5v-7zM12 5.3l6.1 3.7L12 12.7 5.9 9 12 5.3z"/></svg></div>
         <div class="l-lab"><b>Livraison de colis</b><span>Documents &amp; colis express</span></div>
         <div class="l-dots"></div>
-        <div class="l-price">1,80&nbsp;&euro; <small>/ km</small></div>
+        <div class="l-price"><span data-tarif="km-colis">1,80</span>&nbsp;&euro; <small>/ km</small></div>
       </div>
     </div>
     <div class="l-notes rv">
-      <p>Courses de moins de 10 km : 30 € minimum, sans bagages</p>
+      <p><span>Courses de moins de 10 km : <span data-tarif="forfait">30</span> € minimum, sans bagages</span></p>
       <p>Le tarif au km s'applique au-delà de 10 km</p>
     </div>
     <div class="maj-title rv"><svg viewBox="0 0 24 24"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>Majorations applicables</div>
     <div class="chips rv">
-      <div class="chip">Nuit (00h – 8h) <b>+10 €</b> · sur réservation 24h à l'avance</div>
-      <div class="chip">Bagage <b>+5&nbsp;&euro;</b></div>
+      <div class="chip"><span>Nuit (<span data-horaires="nuit">00h – 8h</span>)</span> <b>+<span data-tarif="nuit">10</span> €</b> · sur réservation 24h à l'avance</div>
+      <div class="chip">Sac ou valise cabine <b>+<span data-tarif="bagage">5</span>&nbsp;&euro;</b> · un bagage par moto</div>
       <div class="chip">R&eacute;servation &agrave; l'avance recommand&eacute;e</div>
     </div>
   </div>
@@ -535,8 +527,8 @@ footer{color:rgba(255,255,255,.72)}
     </div>
     <div class="steps-grid">
       <div class="step rv"><div class="step-n">01</div><b>Renseignez votre trajet</b><p>Personnes ou colis, adresses de d&eacute;part et d'arriv&eacute;e, heure souhait&eacute;e, bagages &eacute;ventuels.</p></div>
-      <div class="step rv"><div class="step-n">02</div><b>Recevez votre tarif</b><p>Le prix s'affiche directement, avant d'envoyer votre demande.</p></div>
-      <div class="step rv"><div class="step-n">03</div><b><svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16.2 9.5"/></svg>Fast Driver vous confirme la course</b><p>Vous recevez la confirmation de votre course et du tarif d&eacute;finitif. &Agrave; l'heure. Toujours.</p></div>
+      <div class="step rv"><div class="step-n">02</div><b>Recevez votre tarif</b><p>Le prix s'affiche directement, avant de r&eacute;server.</p></div>
+      <div class="step rv"><div class="step-n">03</div><b><svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16.2 9.5"/></svg>R&eacute;servez et payez dans l'appli</b><p>Le prix affich&eacute; est celui qui est d&eacute;bit&eacute;. &Agrave; l'heure. Toujours.</p></div>
     </div>
   </div>
 </section>
@@ -570,9 +562,9 @@ footer{color:rgba(255,255,255,.72)}
       <div class="svc dark rv">
         <div class="svc-body">
           <div class="svc-idx">DISPONIBLE 7J/7</div>
-          <h3 style="color:#fff">Pr&ecirc;t &agrave; partir, 8h00 – 00h00, 7j/7.</h3>
-          <p>Un message suffit. Tarif annonc&eacute; avant la course, &eacute;quipement passager fourni.</p>
-          <a class="btn svc-btn" href="https://wa.me/33766139850" target="_blank" rel="noopener">R&eacute;server maintenant</a>
+          <h3 style="color:#fff">Pr&ecirc;t &agrave; partir, <span data-horaires="plage">8h00 – 00h00</span>, 7j/7.</h3>
+          <p>Une r&eacute;servation suffit. Tarif annonc&eacute; avant la course, &eacute;quipement passager fourni.</p>
+          <a class="btn svc-btn" href="#reserver" data-appli="">R&eacute;server maintenant</a>
         </div>
       </div>
       <div class="svc wide rv">
@@ -608,7 +600,7 @@ footer{color:rgba(255,255,255,.72)}
   <div class="band-in rv">
     <div class="band-q">De jour comme de nuit,<br><span class="u">toujours &agrave; l'heure.</span></div>
     <div class="band-feats">
-      <div><b>7j/7</b>8h00 – 00h00</div>
+      <div><b>7j/7</b><span data-horaires="plage">8h00 – 00h00</span></div>
       <div><b>Paris &amp; IDF</b>Zone couverte</div>
     </div>
   </div>
@@ -624,15 +616,15 @@ footer{color:rgba(255,255,255,.72)}
     <div class="faq-list rv">
       <div class="faq-item">
         <button class="faq-q">Comment je r&eacute;serve ma course ?<span class="pl">+</span></button>
-        <div class="faq-a"><p>Avec le calculateur en haut de page : choisissez Course ou Colis, vos adresses de d&eacute;part et d'arriv&eacute;e, la date et l'heure. Le prix s'affiche directement, avant de r&eacute;server. Cliquez sur &laquo;&nbsp;R&eacute;server via WhatsApp&nbsp;&raquo; : WhatsApp s'ouvre avec votre r&eacute;servation d&eacute;j&agrave; r&eacute;dig&eacute;e (num&eacute;ro FD, trajet, date, prix). Il ne vous reste qu'&agrave; envoyer le message au 07 66 13 98 50, et Fast Driver vous confirme votre course. Pour plusieurs v&eacute;hicules, utilisez l'onglet &laquo;&nbsp;Plusieurs v&eacute;hicules&nbsp;&raquo;, qui fonctionne de la m&ecirc;me fa&ccedil;on.</p></div>
+        <div class="faq-a"><p>Avec le calculateur en haut de page : choisissez Course ou Colis, vos adresses de d&eacute;part et d'arriv&eacute;e, la date et l'heure. Le prix s'affiche directement, avant de r&eacute;server. Cliquez sur &laquo;&nbsp;R&eacute;server&nbsp;&raquo; : l'appli Fast Driver s'ouvre avec votre trajet d&eacute;j&agrave; rempli. Pour plusieurs v&eacute;hicules, utilisez l'onglet &laquo;&nbsp;Plusieurs v&eacute;hicules&nbsp;&raquo;, qui se r&eacute;serve sur WhatsApp.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Combien &ccedil;a co&ucirc;te ?<span class="pl">+</span></button>
-        <div class="faq-a"><p>Courses de moins de 10 km : 30 € minimum, sans bagages. Le tarif au km s'applique au-delà de 10 km : 2&nbsp;&euro; par kilom&egrave;tre pour le transport de personnes, 1,80&nbsp;&euro; par kilom&egrave;tre pour la livraison de colis. Nuit (00h – 8h) +10 € · sur réservation 24h à l'avance. +5&nbsp;&euro; par bagage. Le prix s'affiche directement dans le calculateur.</p></div>
+        <div class="faq-a"><p>Courses de moins de 10 km : <span data-tarif="forfait">30</span> € minimum, sans bagages. Le tarif au km s'applique au-delà de 10 km : <span data-tarif="km-course">2</span>&nbsp;&euro; par kilom&egrave;tre pour le transport de personnes, <span data-tarif="km-colis">1,80</span>&nbsp;&euro; par kilom&egrave;tre pour la livraison de colis. Nuit (<span data-horaires="nuit">00h – 8h</span>) +<span data-tarif="nuit">10</span> € · sur réservation 24h à l'avance. Sac ou valise cabine +<span data-tarif="bagage">5</span>&nbsp;&euro; · un bagage par moto. Le prix s'affiche directement dans le calculateur.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Vous roulez la nuit ?<span class="pl">+</span></button>
-        <div class="faq-a"><p>Nous roulons de 8h00 &agrave; minuit : 8h00 – 00h00, 7j/7. Nuit (00h – 8h) +10 € · sur réservation 24h à l'avance.</p></div>
+        <div class="faq-a"><p>Nous roulons de <span data-horaires="debut">8h00</span> &agrave; <span data-horaires="fin-mot">minuit</span> : <span data-horaires="plage">8h00 – 00h00</span>, 7j/7. Nuit (<span data-horaires="nuit">00h – 8h</span>) +<span data-tarif="nuit">10</span> € · sur réservation 24h à l'avance.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Quelle zone couvrez-vous ?<span class="pl">+</span></button>
@@ -662,7 +654,7 @@ footer{color:rgba(255,255,255,.72)}
         <b>Contact</b>
         <a href="https://wa.me/33766139850" target="_blank" rel="noopener">07 66 13 98 50 &mdash; WhatsApp</a>
         <span>Paris &middot; &Icirc;le-de-France</span>
-        <span>8h00 – 00h00, 7j/7</span>
+        <span><span data-horaires="plage">8h00 – 00h00</span>, 7j/7</span>
       </div>
       <div class="f-col">
         <b>Navigation</b>

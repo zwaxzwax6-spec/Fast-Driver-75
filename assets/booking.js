@@ -1,11 +1,68 @@
 /* Fast Driver 75 — carte de réservation : Course | Colis | Plusieurs véhicules.
-   Le prix affiché est indicatif ; /api/booking recalcule tout côté serveur. */
+   Course et Colis : le prix vient de la grille du serveur de l'appli (/api/tarifs, sinon la grille embarquée),
+   « Réserver » ouvre la web app (ou l'appli installée, lien universel) avec le trajet déjà rempli.
+   Plusieurs véhicules : formulaire et WhatsApp, inchangés (/api/mise-a-disposition). */
 (function () {
   'use strict';
 
+  /* Adresse de la web app : LE seul endroit où elle est écrite.
+     Recette sur la branche `appli` ; elle passera à https://app.fast-driver-75.fr au « go prod », pas avant. */
+  var APP_URL = 'https://fast-driver-recette.vercel.app';
+
+  /* Lien vers la web app : ?mode=course|colis&depart=…&arrivee=…&quand=maintenant|AAAA-MM-JJTHH:MM&bagage=aucun|sac|cabine|soute */
+  function appUrl(params) {
+    var q = Object.keys(params || {}).filter(function (k) { return params[k]; }).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return APP_URL + '/' + (q ? '?' + q : '');
+  }
+  // « Réserver » du menu et « Réserver maintenant » des services : la web app (data-appli = course, colis ou vide).
+  document.querySelectorAll('a[data-appli]').forEach(function (a) {
+    a.href = appUrl({ mode: a.getAttribute('data-appli') });
+  });
+
+  var P = window.FDPricing;
+  /* Montants et horaires écrits dans la page : remplis depuis la grille et les horaires en vigueur
+     (les valeurs actuelles restent écrites dans le HTML, en repli). */
+  function eurCourt(c) { return c % 100 === 0 ? String(c / 100) : (c / 100).toFixed(2).replace('.', ','); }
+  function hDebut(hm, court) { var mm = hm.slice(3, 5); return Number(hm.slice(0, 2)) + 'h' + (court && mm === '00' ? '' : mm); }
+  function hFin(hm, court) { var mm = hm.slice(3, 5); return hm.slice(0, 2) + 'h' + (court && mm === '00' ? '' : mm); }
+  function remplirTextes() {
+    if (!P) return;
+    var g = P.getGrille(), h = P.getHoraires();
+    var tarif = { forfait: g.forfaitCentimes, 'km-course': g.kmCentimes.course, 'km-colis': g.kmCentimes.colis, nuit: g.nuitCentimes, bagage: g.bagageCentimes };
+    var heure = {
+      plage: hDebut(h.debut) + ' – ' + hFin(h.fin),
+      nuit: hFin(h.fin, true) + ' – ' + hDebut(h.debut, true),
+      debut: hDebut(h.debut),
+      'fin-mot': h.fin === '00:00' ? 'minuit' : hFin(h.fin)
+    };
+    document.querySelectorAll('[data-tarif]').forEach(function (e) {
+      var c = tarif[e.getAttribute('data-tarif')];
+      if (typeof c === 'number') e.textContent = eurCourt(c);
+    });
+    document.querySelectorAll('[data-horaires]').forEach(function (e) {
+      var v = heure[e.getAttribute('data-horaires')];
+      if (v) e.textContent = v;
+    });
+  }
+  /* Grille et horaires lus par le serveur du site (jamais de clé dans la page). Sans réponse : la grille embarquée. */
+  var onTarifs = function () {};
+  function poserTarifs(j) {
+    if (!P || !j || !j.grille || !j.horaires) return;
+    try { P.configure({ grille: j.grille, horaires: j.horaires }); } catch (e) { return; }
+    remplirTextes();
+    onTarifs();
+  }
+  if (P && window.fetch) {
+    fetch('/api/tarifs', { headers: { accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(poserTarifs, function () { /* grille embarquée */ });
+  }
+
   var card = document.getElementById('resa-card');
-  if (!card || !window.FD || !window.FDPricing) return;
-  var FD = window.FD, P = window.FDPricing;
+  if (!card || !window.FD || !P) return;
+  var FD = window.FD;
 
   var LEAFLET = {
     css: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
@@ -18,7 +75,7 @@
   var tabs = card.querySelectorAll('.tab');
   var calc = $('calc-form'), mad = $('mad-form'), done = $('done');
   var el = {
-    dep: $('f-dep'), arr: $('f-arr'), date: $('f-date'), time: $('f-time'), bag: $('f-bag'), bagWrap: $('f-bag-wrap'),
+    dep: $('f-dep'), arr: $('f-arr'), date: $('f-date'), time: $('f-time'), bag: $('f-bag'), bagWrap: $('f-bag-wrap'), soute: $('f-bag-soute'),
     alert: $('q-alert'), quote: $('quote'), wait: $('q-wait'), box: $('q-box'), lines: $('q-lines'), total: $('q-total'),
     note: $('q-note'), meta: $('route-meta'), map: $('route-map'), mapIn: $('route-map-in')
   };
@@ -42,6 +99,7 @@
     mad.hidden = !isFleet;
     el.bagWrap.hidden = mode !== 'course';
     el.bag.disabled = mode !== 'course';
+    onBag();
     if (!isFleet) calc.setAttribute('aria-labelledby', 'tab-' + mode);
     renderPrice();
     // Retour depuis l'onglet flotte : la carte a pu être masquée (ou jamais mesurée) entre-temps.
@@ -60,9 +118,6 @@
   document.querySelectorAll('[data-open-tab]').forEach(function (a) {
     a.addEventListener('click', function () { setMode(a.dataset.openTab); });
   });
-
-  // Libellé du supplément bagage tiré de la constante unique de la grille.
-  $('f-bag-price').textContent = '(+' + P.fmtEur(P.BAGAGE_EUR).replace(',00', '') + ' par bagage)';
 
   var today = P.todayParis();
   el.date.min = today;
@@ -91,7 +146,16 @@
   }
   el.date.addEventListener('change', onWhen);
   el.time.addEventListener('change', onWhen);
-  el.bag.addEventListener('change', renderPrice);
+  /* Bagage unique : « Soute » affiche l'avertissement de l'appli (aucun supplément). */
+  function onBag() {
+    el.soute.hidden = !(state.mode === 'course' && el.bag.value === 'soute');
+  }
+  el.bag.addEventListener('change', function () { onBag(); renderPrice(); });
+  onTarifs = function () {
+    renderPrice();
+    var pk = pickup();
+    if (pk.error === 'nuit24h') FD.setError(calc, 'time', P.PICKUP_MESSAGES.nuit24h);
+  };
 
   /* ---------- Devis ---------- */
   function clearQuote() {
@@ -135,6 +199,10 @@
       if (my !== state.seq) return;
       el.wait.hidden = true;
       if (r.status === 200 && r.json.ok) {
+        // Même grille que le serveur qui vient de calculer : le prix affiché est le sien.
+        if (r.json.grille && r.json.horaires) {
+          try { P.configure({ grille: r.json.grille, horaires: r.json.horaires }); remplirTextes(); } catch (e) { /* grille embarquée */ }
+        }
         state.route = { km: r.json.distanceKm, min: r.json.durationMin, geometry: r.json.geometry };
         renderPrice({ reveal: true });
         showMap(state.route.geometry);
@@ -156,7 +224,7 @@
     cancelAnimationFrame(countRaf);
     var from = shown, start = performance.now();
     // Lecteurs d'écran : une seule annonce, le prix final (le compteur visuel n'est pas annoncé).
-    $('q-live').textContent = 'Prix estimatif : ' + P.fmtEur(target);
+    $('q-live').textContent = 'Prix fixe : ' + P.fmtEur(target);
     if (!ms || reducedMotion) { shown = target; el.total.textContent = P.fmtEur(target); return; }
     (function step(now) {
       var t = Math.min(1, (now - start) / ms), k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -174,7 +242,7 @@
       return;
     }
     var pk = pickup();
-    var price = P.computePrice({ mode: state.mode, km: r.km, bagages: Number(el.bag.value || 0), night: pk.night });
+    var price = P.computePrice({ mode: state.mode, km: r.km, bagage: state.mode === 'course' ? el.bag.value : 'aucun', night: pk.night });
     el.lines.innerHTML = price.lines.map(function (l) {
       return '<div class="q-line"><span>' + FD.esc(l.label) + '</span><b>' + P.fmtEur(l.amount) + '</b></div>';
     }).join('');
@@ -243,6 +311,7 @@
     b.setAttribute('aria-busy', on ? 'true' : 'false');
   }
 
+  /* « Réserver » : la web app (ou l'appli installée) avec le trajet, le type, l'heure et le bagage déjà remplis. */
   calc.addEventListener('submit', function (e) {
     e.preventDefault();
     FD.clearErrors(calc);
@@ -255,18 +324,12 @@
     var errors = FD.check(calc, extra);
     if (FD.showErrors(calc, errors)) return;
 
-    var v = FD.values(calc);
-    var data = FD.antispam({
-      mode: state.mode, from: state.from.label, to: state.to.label, date: v.date, time: v.time,
-      bagages: state.mode === 'course' ? v.bagages : '0',
-      prenom: v.prenom, nom: v.nom, tel: v.tel, email: v.email, commentaire: v.commentaire
-    }, calc);
-    busy(calc, true);
-    FD.post('/api/booking', data).then(function (r) {
-      busy(calc, false);
-      if (r.status === 200 && r.json.ok) return showBookingDone(data, r.json);
-      if (r.json && r.json.errors) return FD.showErrors(calc, r.json.errors, r.json.error);
-      calc.querySelector('.form-err').textContent = (r.json && r.json.error) || 'Envoi impossible pour le moment. Réessayez dans un instant.';
+    window.location.href = appUrl({
+      mode: state.mode === 'colis' ? 'colis' : 'course',
+      depart: state.from.label,
+      arrivee: state.to.label,
+      quand: el.date.value + 'T' + el.time.value,
+      bagage: state.mode === 'course' ? el.bag.value : 'aucun'
     });
   });
 
@@ -274,12 +337,6 @@
     return rows.map(function (r) {
       return '<div class="q-line"><span>' + FD.esc(r[0]) + '</span><b>' + FD.esc(r[1]) + '</b></div>';
     }).join('');
-  }
-
-  function showBookingDone(data, res) {
-    var rows = [['Départ', res.from || data.from], ['Arrivée', res.to || data.to], ['Prise en charge', res.when || data.date + ' ' + data.time]];
-    if (data.mode === 'course') rows.push(['Bagages', data.bagages]);
-    showDone(res, { rows: rows, total: res.price ? res.price.totalText : 'à confirmer' });
   }
 
   /* Récapitulatif : données seulement (jamais de HTML stocké), échappées à chaque affichage. */
@@ -393,4 +450,6 @@
   if (returning()) restoreDone(); else forgetDone();
   // Retour depuis WhatsApp avec une page restaurée du cache (bfcache) : l'écran est déjà là ; sinon on le recharge.
   window.addEventListener('pageshow', function (e) { if (e.persisted && done.hidden) restoreDone(); });
+  // Choix du bagage restauré par le navigateur (retour arrière) : l'avertissement « Soute » suit.
+  window.addEventListener('pageshow', onBag);
 })();
