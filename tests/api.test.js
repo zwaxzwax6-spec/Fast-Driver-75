@@ -94,10 +94,29 @@ test('C5 prix falsifié ignoré : e-mail avec le prix recalculé', async () => {
 
 test('colis : sujet [Colis], bagages ignorés', async () => {
   clearMails();
-  const r = await call(booking, { ...base(), mode: 'colis', bagages: '3' });
+  const r = await call(booking, { ...base(), mode: 'colis', bagages: '1' });
   assert.equal(r.status, 200);
   assert.equal(r.json.price.total, 30);
   assert.match(mails()[0].subject, /^\[Colis\] /);
+});
+
+test('bagage unique : bagages 0 ou 1 acceptés, 2 ou plus refusés (400, aucun e-mail)', async () => {
+  clearMails();
+  let r = await call(booking, { ...base(), bagages: '0' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.price.total, 30);
+  r = await call(booking, { ...base(), bagages: '1' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.price.total, 35);
+  clearMails();
+  for (const n of ['2', '3', '4']) {
+    r = await call(booking, { ...base(), bagages: n });
+    assert.equal(r.status, 400, 'bagages ' + n);
+    assert.ok(r.json.errors.bagages);
+    r = await call(booking, { ...base(), mode: 'colis', bagages: n });
+    assert.equal(r.status, 400, 'colis, bagages ' + n);
+  }
+  assert.equal(mails().length, 0);
 });
 
 test('C8 champs invalides : 400, erreurs par champ, aucun e-mail', async () => {
@@ -215,6 +234,19 @@ test('quote : route mock + prix + géométrie qui relie les points', async () =>
   assert.deepEqual(rev.json.geometry.coordinates[0], r.json.geometry.coordinates.at(-1));
   const out = await call(quote, { mode: 'course', from: { lon: 3.06, lat: 50.63 }, to: { lon: 2.3, lat: 48.8 } });
   assert.equal(out.status, 400);
+});
+
+test('quote : bagage unique (sac, cabine +5 €, soute 0 €), ignoré pour un colis, deux bagages refusés', async () => {
+  const from = { lon: 2.339822, lat: 48.861399 }, to = { lon: 2.297895, lat: 48.838126 };
+  const prix = async (b) => (await call(quote, { mode: 'course', from, to, ...b })).json.price.total;
+  assert.equal(await prix({ bagage: 'aucun' }), 30);
+  assert.equal(await prix({ bagage: 'sac' }), 35);
+  assert.equal(await prix({ bagage: 'cabine' }), 35);
+  assert.equal(await prix({ bagage: 'soute' }), 30);
+  assert.equal(await prix({ bagages: 1 }), 35);
+  assert.equal((await call(quote, { mode: 'colis', from, to, bagage: 'sac' })).json.price.total, 30);
+  assert.equal((await call(quote, { mode: 'course', from, to, bagages: 2 })).status, 400);
+  assert.equal((await call(quote, { mode: 'course', from, to, bagage: 'valise' })).status, 400);
 });
 
 test('C14 sur Vercel : mock ignoré, sans clé ORS -> 503 propre, jamais de faux prix', async () => {
@@ -452,7 +484,7 @@ test('W1 course : lien wa.me décodé = texte attendu exact', async (t) => {
 test('W1 colis : lien wa.me décodé = texte attendu exact (sans bagages, sans commentaire vide)', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-10T10:00:00Z') });
   clearMails();
-  const r = await call(booking, wabody({ mode: 'colis', bagages: '3', commentaire: '  ' }));
+  const r = await call(booking, wabody({ mode: 'colis', bagages: '1', commentaire: '  ' }));
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(decoded(r), [
     'Bonjour Fast Driver, je souhaite réserver :',

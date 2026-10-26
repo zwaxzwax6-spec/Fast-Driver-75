@@ -29,7 +29,8 @@ module.exports = http.postHandler(async function (body, req) {
     .field('to', { max: 200, requiredMsg: 'Choisissez l’adresse d’arrivée dans la liste.' })
     .field('date', { max: 10, check: V.checkDate })
     .field('time', { max: 5, check: V.checkTime })
-    .field('bagages', { required: false, max: 1, check: function (x) { return /^[0-3]$/.test(x) ? null : 'Entre 0 et 3 bagages.'; }, map: Number });
+    // Un seul bagage par moto : l'ancien champ `bagages` vaut 0 ou 1 (1 = sac) ; 2 ou plus est refusé.
+    .field('bagages', { required: false, max: 1, check: function (x) { return /^[01]$/.test(x) ? null : 'Choix invalide.'; }, map: Number });
   V.contact(v).field('commentaire', { multiline: true, required: false, max: 1000 });
   if (!v.ok()) throw new http.HttpError(400, 'Certains champs sont à corriger.', { errors: v.errors });
   var d = v.data;
