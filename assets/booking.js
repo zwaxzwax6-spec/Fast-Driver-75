@@ -30,7 +30,7 @@
   function remplirTextes() {
     if (!P) return;
     var g = P.getGrille(), h = P.getHoraires();
-    var tarif = { forfait: g.forfaitCentimes, 'km-course': g.kmCentimes.course, 'km-colis': g.kmCentimes.colis, nuit: g.nuitCentimes, bagage: g.bagageCentimes };
+    var tarif = { 'km-court-course': g.kmCourtCentimes.course, 'km-court-colis': g.kmCourtCentimes.colis, 'km-course': g.kmCentimes.course, 'km-colis': g.kmCentimes.colis, nuit: g.nuitCentimes, bagage: g.bagageCentimes };
     var heure = {
       plage: hDebut(h.debut) + ' – ' + hFin(h.fin),
       nuit: hFin(h.fin, true) + ' – ' + hDebut(h.debut, true),

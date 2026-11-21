@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fast Driver 75 — Votre taxi moto à Paris</title>
-<meta name="description" content="Taxi moto & livraison express de colis à Paris et Île-de-France. À l'heure. Toujours. Prix affiché en ligne : 2 €/km personnes, 1,80 €/km colis. 8h00 – 00h00, 7j/7.">
+<meta name="description" content="Taxi moto & livraison express de colis à Paris et Île-de-France. À l'heure. Toujours. Prix affiché en ligne : 3 €/km personnes, 2,70 €/km colis, 2 € et 1,80 €/km à partir de 10 km. 8h00 – 00h00, 7j/7.">
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -496,18 +496,18 @@ footer{color:rgba(255,255,255,.72)}
         <div class="l-ico"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 12c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5z"/></svg></div>
         <div class="l-lab"><b>Taxi moto</b><span>Transport de personnes &mdash; <span data-horaires="plage">8h00 – 00h00</span>, 7j/7</span></div>
         <div class="l-dots"></div>
-        <div class="l-price"><span data-tarif="km-course">2</span>&nbsp;&euro; <small>/ km</small></div>
+        <div class="l-price"><span data-tarif="km-court-course">3</span>&nbsp;&euro; <small>/ km</small></div>
       </div>
       <div class="l-row">
         <div class="l-ico"><svg viewBox="0 0 24 24"><path d="M21 8.5 12 3 3 8.5v7L12 21l9-5.5v-7zM12 5.3l6.1 3.7L12 12.7 5.9 9 12 5.3z"/></svg></div>
         <div class="l-lab"><b>Livraison de colis</b><span>Documents &amp; colis express</span></div>
         <div class="l-dots"></div>
-        <div class="l-price"><span data-tarif="km-colis">1,80</span>&nbsp;&euro; <small>/ km</small></div>
+        <div class="l-price"><span data-tarif="km-court-colis">2,70</span>&nbsp;&euro; <small>/ km</small></div>
       </div>
     </div>
     <div class="l-notes rv">
-      <p><span>Courses de moins de 10 km : <span data-tarif="forfait">30</span> € minimum, sans bagages</span></p>
-      <p>Le tarif au km s'applique au-delà de 10 km</p>
+      <p><span>À partir de 10 km : <span data-tarif="km-course">2</span>&nbsp;&euro;/km, colis <span data-tarif="km-colis">1,80</span>&nbsp;&euro;/km</span></p>
+      <p>Le prix au km s'applique à toute la distance</p>
     </div>
     <div class="maj-title rv"><svg viewBox="0 0 24 24"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>Majorations applicables</div>
     <div class="chips rv">
@@ -620,7 +620,7 @@ footer{color:rgba(255,255,255,.72)}
       </div>
       <div class="faq-item">
         <button class="faq-q">Combien &ccedil;a co&ucirc;te ?<span class="pl">+</span></button>
-        <div class="faq-a"><p>Courses de moins de 10 km : <span data-tarif="forfait">30</span> € minimum, sans bagages. Le tarif au km s'applique au-delà de 10 km : <span data-tarif="km-course">2</span>&nbsp;&euro; par kilom&egrave;tre pour le transport de personnes, <span data-tarif="km-colis">1,80</span>&nbsp;&euro; par kilom&egrave;tre pour la livraison de colis. Nuit (<span data-horaires="nuit">00h – 8h</span>) +<span data-tarif="nuit">10</span> € · sur réservation 24h à l'avance. Sac ou valise cabine +<span data-tarif="bagage">5</span>&nbsp;&euro; · un bagage par moto. Le prix s'affiche directement dans le calculateur.</p></div>
+        <div class="faq-a"><p>Moins de 10 km : <span data-tarif="km-court-course">3</span>&nbsp;&euro; par kilom&egrave;tre pour le transport de personnes, <span data-tarif="km-court-colis">2,70</span>&nbsp;&euro; par kilom&egrave;tre pour la livraison de colis. &Agrave; partir de 10 km : <span data-tarif="km-course">2</span>&nbsp;&euro; et <span data-tarif="km-colis">1,80</span>&nbsp;&euro; par kilom&egrave;tre, sur toute la distance. Nuit (<span data-horaires="nuit">00h – 8h</span>) +<span data-tarif="nuit">10</span> € · sur réservation 24h à l'avance. Sac ou valise cabine +<span data-tarif="bagage">5</span>&nbsp;&euro; · un bagage par moto. Le prix s'affiche directement dans le calculateur.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Vous roulez la nuit ?<span class="pl">+</span></button>

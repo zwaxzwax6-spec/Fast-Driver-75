@@ -2,42 +2,42 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const P = require('../assets/pricing.js');
 
-test('C4 grille officielle', () => {
-  assert.equal(P.computePrice({ mode: 'course', km: 6 }).total, 30);
-  assert.equal(P.computePrice({ mode: 'colis', km: 10 }).total, 30);
-  assert.equal(P.computePrice({ mode: 'course', km: 15 }).total, 40);
-  assert.equal(P.computePrice({ mode: 'colis', km: 15 }).total, 39);
-  assert.equal(P.computePrice({ mode: 'course', km: 15, bagages: 1, night: true }).total, 55);
-  assert.equal(P.computePrice({ mode: 'colis', km: 12.3 }).total, 34.14);
+test('grille officielle du 21/11/2026', () => {
+  assert.equal(P.computePrice({ mode: 'course', km: 6 }).total, 18);
+  assert.equal(P.computePrice({ mode: 'colis', km: 10 }).total, 18);
+  assert.equal(P.computePrice({ mode: 'course', km: 15 }).total, 30);
+  assert.equal(P.computePrice({ mode: 'colis', km: 15 }).total, 27);
+  assert.equal(P.computePrice({ mode: 'course', km: 15, bagages: 1, night: true }).total, 45);
+  assert.equal(P.computePrice({ mode: 'colis', km: 12.3 }).total, 22.14);
 });
 
 test('distance arrondie à 0,1 km avant calcul', () => {
   assert.equal(P.roundKm(12.34), 12.3);
   assert.equal(P.roundKm(12.35), 12.4);
   assert.equal(P.computePrice({ mode: 'colis', km: 12.34 }).km, 12.3);
-  assert.equal(P.computePrice({ mode: 'colis', km: 12.34 }).total, 34.14);
+  assert.equal(P.computePrice({ mode: 'colis', km: 12.34 }).total, 22.14);
 });
 
 test('lignes de détail', () => {
   const r = P.computePrice({ mode: 'course', km: 15, bagage: 'sac', night: true });
-  assert.deepEqual(r.lines.map(l => l.amount), [30, 10, 5, 10]);
-  assert.equal(r.total, 55);
-  assert.deepEqual(P.computePrice({ mode: 'course', km: 15, bagage: 'cabine' }).lines.map(l => l.amount), [30, 10, 5]);
-  assert.deepEqual(P.computePrice({ mode: 'course', km: 15, bagage: 'soute' }).lines.map(l => l.amount), [30, 10]);
+  assert.deepEqual(r.lines.map(l => l.amount), [30, 5, 10]);
+  assert.equal(r.total, 45);
+  assert.deepEqual(P.computePrice({ mode: 'course', km: 15, bagage: 'cabine' }).lines.map(l => l.amount), [30, 5]);
+  assert.deepEqual(P.computePrice({ mode: 'course', km: 15, bagage: 'soute' }).lines.map(l => l.amount), [30]);
 });
 
 test('bagage unique : aucun, sac, cabine ou soute ; ignoré pour les colis ; toute autre valeur refusée', () => {
-  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'aucun' }).total, 30);
-  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'sac' }).total, 35);
-  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'cabine' }).total, 35);
+  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'aucun' }).total, 15);
+  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'sac' }).total, 20);
+  assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'cabine' }).total, 20);
   assert.equal(P.computePrice({ mode: 'course', km: 5, bagage: 'soute' }).total, 30);
-  assert.equal(P.computePrice({ mode: 'colis', km: 5, bagage: 'sac' }).total, 30);
-  assert.equal(P.computePrice({ mode: 'colis', km: 5, bagage: 'cabine' }).total, 30);
+  assert.equal(P.computePrice({ mode: 'colis', km: 5, bagage: 'sac' }).total, 13.5);
+  assert.equal(P.computePrice({ mode: 'colis', km: 5, bagage: 'cabine' }).total, 13.5);
   assert.throws(() => P.computePrice({ mode: 'course', km: 5, bagage: 'valise' }));
   assert.throws(() => P.computePrice({ mode: 'course', km: 5, bagage: ['sac', 'sac'] }));
   // L'ancien paramètre du site : 0 ou 1 (1 = sac) ; deux bagages ou plus sont refusés.
-  assert.equal(P.computePrice({ mode: 'course', km: 5, bagages: 1 }).total, 35);
-  assert.equal(P.computePrice({ mode: 'course', km: 5, bagages: 0 }).total, 30);
+  assert.equal(P.computePrice({ mode: 'course', km: 5, bagages: 1 }).total, 20);
+  assert.equal(P.computePrice({ mode: 'course', km: 5, bagages: 0 }).total, 15);
   assert.throws(() => P.computePrice({ mode: 'course', km: 5, bagages: 2 }));
   assert.throws(() => P.computePrice({ mode: 'course', km: 5, bagages: 4 }));
   assert.throws(() => P.computePrice({ mode: 'course', km: 5, bagage: 'sac', bagages: 1 }));
@@ -46,8 +46,8 @@ test('bagage unique : aucun, sac, cabine ou soute ; ignoré pour les colis ; tou
 });
 
 test('pas d’erreur de flottant', () => {
-  assert.equal(P.computePrice({ mode: 'colis', km: 10.1 }).total, 30.18);
-  assert.equal(P.computePrice({ mode: 'course', km: 33.3 }).total, 76.6);
+  assert.equal(P.computePrice({ mode: 'colis', km: 10.1 }).total, 18.18);
+  assert.equal(P.computePrice({ mode: 'course', km: 33.3 }).total, 66.6);
 });
 
 test('fmtEur', () => {

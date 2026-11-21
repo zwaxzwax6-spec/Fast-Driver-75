@@ -19,7 +19,7 @@ const quote = require(path.join(ROOT, 'api/quote.js'));
 const apiTarifs = require(path.join(ROOT, 'api/tarifs.js'));
 const tarifs = require(path.join(ROOT, 'lib/tarifs.js'));
 
-const GRILLE = { forfaitCentimes: 3000, forfaitDixiemesKm: 100, kmCentimes: { course: 200, colis: 180 }, bagageCentimes: 500, nuitCentimes: 1000 };
+const GRILLE = { seuilDixiemesKm: 100, kmCourtCentimes: { course: 300, colis: 270 }, kmCentimes: { course: 200, colis: 180 }, bagageCentimes: 500, nuitCentimes: 1000 };
 let serveur = null; // réponse du serveur ; null = pas de réponse
 let appels = 0;
 global.fetch = async (url, init) => {
@@ -63,15 +63,15 @@ test('grille du serveur changée (course 2,50 €/km) : api/quote.js et le calcu
   const q = await call(quote, ORLY);
   assert.equal(q.status, 200);
   assert.equal(q.json.distanceKm, 20.2);
-  assert.equal(q.json.price.total, 55.5); // 30 + 10,2 km × 2,50
+  assert.equal(q.json.price.total, 50.5); // 20,2 km × 2,50
   assert.equal(q.json.grille.kmCentimes.course, 250);
 
   const t = await call(apiTarifs, null, 'GET');
   assert.equal(t.status, 200);
   assert.equal(t.json.source, 'serveur');
   const P = calculateur(t.json);
-  assert.equal(P.computePrice({ mode: 'course', km: q.json.distanceKm }).total, 55.5);
-  assert.equal(P.computePrice({ mode: 'course', km: q.json.distanceKm, bagage: 'sac', night: true }).total, 70.5);
+  assert.equal(P.computePrice({ mode: 'course', km: q.json.distanceKm }).total, 50.5);
+  assert.equal(P.computePrice({ mode: 'course', km: q.json.distanceKm, bagage: 'sac', night: true }).total, 65.5);
 });
 
 test('horaires du serveur : la règle de nuit et son message suivent', async () => {
@@ -105,18 +105,18 @@ test('sans réponse du serveur : la grille embarquée s’applique (quote et cal
   serveur = null;           // …puis le serveur ne répond plus
   const q = await call(quote, ORLY);
   assert.equal(q.status, 200);
-  assert.equal(q.json.price.total, 50.4); // 30 + 10,2 km × 2 €
+  assert.equal(q.json.price.total, 40.4); // 20,2 km × 2 €
   const t = await call(apiTarifs, null, 'GET');
   assert.equal(t.json.source, 'embarquee');
-  assert.equal(calculateur(t.json).computePrice({ mode: 'course', km: 20.2 }).total, 50.4);
-  assert.equal(calculateur(null).computePrice({ mode: 'course', km: 20.2 }).total, 50.4); // /api/tarifs injoignable
+  assert.equal(calculateur(t.json).computePrice({ mode: 'course', km: 20.2 }).total, 40.4);
+  assert.equal(calculateur(null).computePrice({ mode: 'course', km: 20.2 }).total, 40.4); // /api/tarifs injoignable
 });
 
 test('réponse invalide du serveur : grille embarquée, jamais un prix inventé', async () => {
   tarifs.viderCache();
   serveur = { version: 9, grille: { ...GRILLE, kmCentimes: { course: -1, colis: 180 } }, horaires: { debut: '08:00', fin: '00:00' } };
   const q = await call(quote, ORLY);
-  assert.equal(q.json.price.total, 50.4);
+  assert.equal(q.json.price.total, 40.4);
 });
 
 test('sans variables d’environnement : grille embarquée, aucun appel', async () => {

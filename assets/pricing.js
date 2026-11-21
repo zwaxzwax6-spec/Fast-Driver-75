@@ -67,8 +67,8 @@ var __FDP = (() => {
 
   // ../../config/grille.ts
   var GRILLE_DEFAUT = {
-    forfaitCentimes: 3e3,
-    forfaitDixiemesKm: 100,
+    seuilDixiemesKm: 100,
+    kmCourtCentimes: { course: 300, colis: 270 },
     kmCentimes: { course: 200, colis: 180 },
     bagageCentimes: 500,
     nuitCentimes: 1e3
@@ -103,19 +103,20 @@ var __FDP = (() => {
   // ../../config/categories.ts
   var BAGAGES = ["aucun", "sac", "cabine", "soute"];
   var BAGAGES_PAYANTS = ["sac", "cabine"];
+  var BAGAGES_DEUX_MOTOS = ["soute"];
+  var MOTOS_PAR_COURSE = 2;
 
   // ../../config/regles.ts
   var REGLES = {
-    /** Durée d'une offre de dispatch (§3.3). */
-    offreSecondes: 20,
+    /** Le délai laissé à chaque chauffeur pour répondre (§3.3 ; 1 min 30, demande du client du 02/11/2026) : l'offre du dispatch
+     *  expire au bout de ce délai ; une course confiée par le gérant sans réponse au bout de ce délai le fait prévenir (§12). */
+    offreSecondes: 90,
     /** Le dispatch d'une course réservée part ce délai avant l'heure (§3.2). */
     dispatchAvantMinutes: 30,
     /** L'empreinte est prise ce délai avant l'heure, ou à la réservation si la course part plus tôt (§3.4). */
     empreinteAvantHeures: 24,
     /** Hors horaires : réservation au moins ce délai à l'avance (§3.1). */
     nuitPreavisHeures: 24,
-    /** Course confiée sans réponse : le gérant est prévenu après ce délai (§3.3, §12). */
-    confieeSansReponseMinutes: 3,
     /** Frais d'annulation après acceptation, en % de la course, figés à la réservation (§0). */
     annulationPourcent: 50,
     /** Taux de TVA légaux, en % (§3.6). */
@@ -126,6 +127,9 @@ var __FDP = (() => {
     positionFraicheurSecondes: 60,
     /** Le lien de suivi partagé expire ce délai après la fin de la course (§3.9). */
     suiviExpireHeures: 24,
+    /** La part du chauffeur préremplie à son ajout, en % (75 % chauffeur, 25 % gérant ; demande du client du 02/11/2026) ;
+     *  elle se règle ensuite chauffeur par chauffeur (§3.5). */
+    partChauffeurPourcent: 75,
     /** Base de la part du chauffeur (§3.5, §12) : le prix TTC payé. */
     basePart: "ttc",
     /** Délai minimal entre deux envois du code de connexion, en secondes (§3.8). */
@@ -156,7 +160,8 @@ var __FDP = (() => {
     return roundKm(km).toFixed(1).replace(".", ",");
   }
   function validerGrille(g) {
-    const nums = [g.forfaitCentimes, g.forfaitDixiemesKm, g.kmCentimes.course, g.kmCentimes.colis, g.bagageCentimes, g.nuitCentimes];
+    var _a, _b, _c, _d;
+    const nums = [g.seuilDixiemesKm, (_a = g.kmCourtCentimes) == null ? void 0 : _a.course, (_b = g.kmCourtCentimes) == null ? void 0 : _b.colis, (_c = g.kmCentimes) == null ? void 0 : _c.course, (_d = g.kmCentimes) == null ? void 0 : _d.colis, g.bagageCentimes, g.nuitCentimes];
     if (!nums.every((n) => Number.isInteger(n) && n >= 0)) throw new Error("grille invalide");
   }
   function bagageDe(opts) {
@@ -183,17 +188,10 @@ var __FDP = (() => {
     const choisi = bagageDe(opts);
     const bagage = mode === "course" ? choisi : "aucun";
     const t = toTenths(km);
+    const rate = t < grille2.seuilDixiemesKm ? grille2.kmCourtCentimes[mode] : grille2.kmCentimes[mode];
     const lines = [
-      { key: "base", label: "Forfait jusqu’à " + fmtKm(grille2.forfaitDixiemesKm / 10).replace(",0", "") + " km", cents: grille2.forfaitCentimes }
+      { key: "km", label: fmtKm(t / 10) + " km × " + fmtEur(rate / 100), cents: t * rate / 10 }
     ];
-    if (t > grille2.forfaitDixiemesKm) {
-      const rate = grille2.kmCentimes[mode];
-      lines.push({
-        key: "km",
-        label: fmtKm((t - grille2.forfaitDixiemesKm) / 10) + " km au-delà de " + fmtKm(grille2.forfaitDixiemesKm / 10).replace(",0", "") + " km × " + fmtEur(rate / 100).replace(" €", "") + " €",
-        cents: (t - grille2.forfaitDixiemesKm) * rate / 10
-      });
-    }
     if (BAGAGES_PAYANTS.includes(bagage)) lines.push({ key: "bagage", label: LIBELLE_BAGAGE[bagage], cents: grille2.bagageCentimes });
     if (opts.night) lines.push({ key: "nuit", label: libelleNuit(horaires2), cents: grille2.nuitCentimes });
     let total = 0;
@@ -202,11 +200,12 @@ var __FDP = (() => {
       total += c;
       return { key: l.key, label: l.label, amount: c / 100 };
     });
-    return { mode, km: t / 10, bagage, night: !!opts.night, lines: out, total: total / 100 };
+    const motos = BAGAGES_DEUX_MOTOS.includes(bagage) ? MOTOS_PAR_COURSE : 1;
+    return { mode, km: t / 10, bagage, night: !!opts.night, lines: out, trajet: total / 100, motos, total: total * motos / 100 };
   }
   function prixCourse(opts, grille2, horaires2 = HORAIRES_DEFAUT) {
     const p = computePrice(opts, grille2, horaires2);
-    return __spreadProps(__spreadValues({}, p), { totalCentimes: Math.round(p.total * 100) });
+    return __spreadProps(__spreadValues({}, p), { trajetCentimes: Math.round(p.trajet * 100), totalCentimes: Math.round(p.trajet * 100) * p.motos });
   }
   var fmt = null;
   function parisParts(ms) {
