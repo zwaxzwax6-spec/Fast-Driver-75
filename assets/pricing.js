@@ -8,9 +8,10 @@
   'use strict';
 
   var TZ = 'Europe/Paris';
-  var BASE_CENTS = 3000;          // 30 € jusqu'à 10 km
-  var BASE_TENTHS = 100;          // 10,0 km
-  var RATE_CENTS = { course: 200, colis: 180 }; // €/km au-delà de 10 km
+  // Grille du 21/11/2026 : le prix du km s'applique à toute la distance (plus de forfait).
+  var SEUIL_TENTHS = 100;         // 10,0 km
+  var RATE_COURT_CENTS = { course: 300, colis: 270 }; // €/km sous 10 km
+  var RATE_CENTS = { course: 200, colis: 180 };       // €/km à partir de 10 km
   var BAGAGE_EUR = 5;             // +5 € par bagage, dès le 1er bagage (décision client) : seule valeur à modifier
   var BAGAGE_CENTS = BAGAGE_EUR * 100;
   var NIGHT_CENTS = 1000;
@@ -34,15 +35,8 @@
     if (!(bagages >= 0 && bagages <= MAX_BAGAGES && bagages % 1 === 0)) throw new Error('bagages invalides');
 
     var t = toTenths(km);
-    var lines = [{ key: 'base', label: 'Forfait jusqu’à 10 km', cents: BASE_CENTS }];
-    if (t > BASE_TENTHS) {
-      var rate = RATE_CENTS[mode];
-      lines.push({
-        key: 'km',
-        label: fmtKm((t - BASE_TENTHS) / 10) + ' km au-delà de 10 km × ' + fmtEur(rate / 100).replace(' €', '') + ' €',
-        cents: (t - BASE_TENTHS) * rate / 10
-      });
-    }
+    var rate = t < SEUIL_TENTHS ? RATE_COURT_CENTS[mode] : RATE_CENTS[mode];   // sur toute la distance
+    var lines = [{ key: 'km', label: fmtKm(t / 10) + ' km × ' + fmtEur(rate / 100), cents: t * rate / 10 }];
     for (var i = 0; i < bagages; i++) {
       lines.push({ key: 'bagage', label: 'Bagage ' + (i + 1), cents: BAGAGE_CENTS });
     }

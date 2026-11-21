@@ -74,17 +74,17 @@ test('C5 prix falsifié ignoré : e-mail avec le prix recalculé', async () => {
   clearMails();
   const r = await call(booking, { ...base(), price: 1, total: 1, km: 0.1 });
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  // fixture Paris 1er -> 15e : 5,75 km -> 5,8 km -> 30 € + 1 bagage
-  assert.equal(r.json.price.total, 35);
+  // fixture Paris 1er -> 15e : 5,75 km -> 5,8 km × 3 € = 17,40 € + 1 bagage
+  assert.equal(r.json.price.total, 22.4);
   const m = mails();
   assert.equal(m.length, 1);
   assert.match(m[0].subject, /^\[Course\] /);
-  assert.match(m[0].subject, /35,00/);
+  assert.match(m[0].subject, /22,40/);
   assert.equal(m[0].reply_to, 'camille@example.com');
   assert.deepEqual(m[0].to, ['delivered@resend.dev']);
-  assert.match(m[0].html, /35,00/);
+  assert.match(m[0].html, /22,40/);
   assert.doesNotMatch(m[0].html, /1,00 €/);
-  assert.match(m[0].text, /Prix estimatif : 35,00/);
+  assert.match(m[0].text, /Prix estimatif : 22,40/);
   assert.match(m[0].html, /google\.com\/maps\/dir/);
   assert.match(m[0].html, /tel:\+33612345678/);
   for (const v of ['Camille', 'Martin', '06 12 34 56 78', 'camille@example.com', 'Casque taille M', '160 Rue de Rivoli', '300 Rue de Vaugirard', '14h30']) {
@@ -96,7 +96,7 @@ test('colis : sujet [Colis], bagages ignorés', async () => {
   clearMails();
   const r = await call(booking, { ...base(), mode: 'colis', bagages: '3' });
   assert.equal(r.status, 200);
-  assert.equal(r.json.price.total, 30);
+  assert.equal(r.json.price.total, 15.66);
   assert.match(mails()[0].subject, /^\[Colis\] /);
 });
 
@@ -150,7 +150,7 @@ test('C6 course à 02h00 dans moins de 24 h bloquée, plus de 24 h acceptée +10
   assert.equal(mails().length, 0);
   r = await call(booking, body('2026-10-12')); // dans 38 h
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  assert.equal(r.json.price.total, 45); // 30 + 5 bagage + 10 nuit
+  assert.equal(r.json.price.total, 32.4); // 17,40 + 5 bagage + 10 nuit
   assert.match(mails()[0].html, /nuit/i);
 });
 
@@ -208,7 +208,7 @@ test('quote : route mock + prix + géométrie qui relie les points', async () =>
   const r = await call(quote, { mode: 'course', from: { lon: 2.339822, lat: 48.861399 }, to: { lon: 2.297895, lat: 48.838126 }, bagages: 0 });
   assert.equal(r.status, 200);
   assert.equal(r.json.distanceKm, 5.8);
-  assert.equal(r.json.price.total, 30);
+  assert.equal(r.json.price.total, 17.4);
   assert.ok(r.json.geometry.coordinates.length > 10);
   assert.ok(r.json.durationMin > 5);
   const rev = await call(quote, { mode: 'colis', from: { lon: 2.297895, lat: 48.838126 }, to: { lon: 2.339822, lat: 48.861399 } });
@@ -443,7 +443,7 @@ test('W1 course : lien wa.me décodé = texte attendu exact', async (t) => {
     'Arrivée : 300 Rue de Vaugirard 75015 Paris',
     'Date : 12/10/2026 à 14h30',
     'Bagages : 1',
-    'Distance : 5,8 km · Prix estimatif : 35,00 €',
+    'Distance : 5,8 km · Prix estimatif : 22,40 €',
     'Nom : Camille Martin · Tél : 06 12 34 56 78',
     'Commentaire : Casque taille M'
   ].join('\n'));
@@ -461,7 +461,7 @@ test('W1 colis : lien wa.me décodé = texte attendu exact (sans bagages, sans c
     'Départ : 160 Rue de Rivoli 75001 Paris',
     'Arrivée : 300 Rue de Vaugirard 75015 Paris',
     'Date : 12/10/2026 à 14h30',
-    'Distance : 5,8 km · Prix estimatif : 30,00 €',
+    'Distance : 5,8 km · Prix estimatif : 15,66 €',
     'Nom : Camille Martin · Tél : 06 12 34 56 78'
   ].join('\n'));
 });
@@ -503,7 +503,7 @@ test('W2 prix falsifié par le navigateur : le message WhatsApp porte le prix re
   const r = await call(booking, wabody({ price: 1, total: 1, totalText: '1,00 €', km: 0.1, distanceKm: 0.1 }));
   assert.equal(r.status, 200);
   const text = decoded(r);
-  assert.match(text, /Distance : 5,8 km · Prix estimatif : 35,00 €/);
+  assert.match(text, /Distance : 5,8 km · Prix estimatif : 22,40 €/);
 });
 
 test('W4 course : même numéro FD-XXXX dans le sujet de l’e-mail de sauvegarde', async () => {
@@ -546,7 +546,7 @@ test('WhatsApp : numéro et prix jamais repris du navigateur', async () => {
   const r = await call(booking, { ...base(), ref: 'FD-HACK', whatsapp: { text: 'x' }, price: { total: 1 } });
   assert.match(r.json.ref, REF_RE);
   assert.notEqual(r.json.ref, 'FD-HACK');
-  assert.match(decoded(r), /Prix estimatif : 35,00/);
+  assert.match(decoded(r), /Prix estimatif : 22,40/);
 });
 
 test('numéro unique entre /api/booking et /api/mise-a-disposition dans la même minute (réservation atomique)', async (t) => {
@@ -622,7 +622,7 @@ test('Resend en panne : la réservation WhatsApp reste possible (e-mail = sauveg
     const r = await call(booking, base());
     assert.equal(r.status, 200, JSON.stringify(r.json));
     assert.match(r.json.ref, REF_RE);
-    assert.match(decoded(r), /Prix estimatif : 35,00/);
+    assert.match(decoded(r), /Prix estimatif : 22,40/);
     const m = await call(mad, {
       elapsed: 10000, website: '', nb_vehicules: '3', date: parisIn(24 * 10).date, heure_debut: '18:00', heure_fin: '20:00',
       lieu: 'Paris', duree: '2 heures', type: 'groupe', prenom: 'Léa', nom: 'Bernard', tel: '0612345678', email: 'lea@societe.fr'

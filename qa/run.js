@@ -147,8 +147,8 @@ const MAP_PROBE = () => {
       // Les médias base64 contiennent des suites de caractères aléatoires : exclus du grep de texte.
       const all = htmls.join('\n').replace(/data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+/g, 'data:');
       const text = decode(all);
-      const absent = ['1,70', '23h', 'jour & nuit', 'temps réel'];
-      const present = ['1,80', '30 € minimum', '8h00 – 00h00', "24h à l'avance"];
+      const absent = ['1,70', '23h', 'jour & nuit', 'temps réel', '30 € minimum'];
+      const present = ['1,80', '2,70', '8h00 – 00h00', "24h à l'avance"];
       const hitsAbsent = absent.filter(k => all.toLowerCase().includes(k) || text.toLowerCase().includes(k) || all.includes(k.replace('&', '&amp;')) || all.includes(k.replace('é', '&eacute;')));
       const missing = present.filter(k => !(all.includes(k) || text.includes(k)));
       const counts = present.map(k => `${k}×${(all.split(k).length - 1)}`).join(', ');
@@ -178,10 +178,10 @@ const MAP_PROBE = () => {
     {
       const P = require(path.join(SITE, 'assets/pricing.js'));
       const cases = [
-        ['6 km pers', { mode: 'course', km: 6 }, 30], ['10 km colis', { mode: 'colis', km: 10 }, 30],
-        ['15 km pers', { mode: 'course', km: 15 }, 40], ['15 km colis', { mode: 'colis', km: 15 }, 39],
-        ['15 km pers 01h00 + 1 bagage', { mode: 'course', km: 15, bagages: 1, night: P.checkPickup(parisDate(3), '01:00').night }, 55],
-        ['12,3 km colis', { mode: 'colis', km: 12.3 }, 34.14]
+        ['6 km pers', { mode: 'course', km: 6 }, 18], ['10 km colis', { mode: 'colis', km: 10 }, 18],
+        ['15 km pers', { mode: 'course', km: 15 }, 30], ['15 km colis', { mode: 'colis', km: 15 }, 27],
+        ['15 km pers 01h00 + 1 bagage', { mode: 'course', km: 15, bagages: 1, night: P.checkPickup(parisDate(3), '01:00').night }, 45],
+        ['12,3 km colis', { mode: 'colis', km: 12.3 }, 22.14]
       ];
       const vals = cases.map(([l, o, e]) => ({ l, got: P.computePrice(o).total, e }));
       let npm = '';
