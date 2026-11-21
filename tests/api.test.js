@@ -15,6 +15,7 @@ delete process.env.RESEND_DOMAIN_VERIFIED;
 const ROOT = path.join(__dirname, '..');
 const booking = require(path.join(ROOT, 'api/booking.js'));
 const quote = require(path.join(ROOT, 'api/quote.js'));
+const route = require(path.join(ROOT, 'lib/route.js'));   // le mode local du calculateur (en ligne : le devis de l'appli)
 const recrutement = require(path.join(ROOT, 'api/recrutement.js'));
 const mad = require(path.join(ROOT, 'api/mise-a-disposition.js'));
 
@@ -24,11 +25,13 @@ const PLACES = {
   'Lille': { postcode: '59000', c: [3.06, 50.63] }
 };
 let geoCalls = 0;
+const geoQ = [];
 global.fetch = async (url) => {
   const u = new URL(url);
   assert.equal(u.hostname, 'api-adresse.data.gouv.fr', 'seul l’API Adresse est appelée en mock');
   geoCalls++;
   const q = u.searchParams.get('q');
+  geoQ.push(q);
   const p = PLACES[q];
   const features = p ? [{ geometry: { coordinates: p.c }, properties: { label: q, postcode: p.postcode } }] : [];
   return { ok: true, json: async () => ({ features }) };
@@ -205,23 +208,24 @@ test('confirmation client seulement si RESEND_DOMAIN_VERIFIED=true', async () =>
 });
 
 test('quote : route mock + prix + géométrie qui relie les points', async () => {
-  const r = await call(quote, { mode: 'course', from: { lon: 2.339822, lat: 48.861399 }, to: { lon: 2.297895, lat: 48.838126 }, bagages: 0 });
+  const r = await call(quote, { mode: 'course', from: { lon: 2.339822, lat: 48.861399, label: '160 Rue de Rivoli 75001 Paris' }, to: { lon: 2.297895, lat: 48.838126, label: '300 Rue de Vaugirard 75015 Paris' }, bagages: 0 });
   assert.equal(r.status, 200);
   assert.equal(r.json.distanceKm, 5.8);
   assert.equal(r.json.price.total, 17.4);
   assert.ok(r.json.geometry.coordinates.length > 10);
   assert.ok(r.json.durationMin > 5);
-  const rev = await call(quote, { mode: 'colis', from: { lon: 2.297895, lat: 48.838126 }, to: { lon: 2.339822, lat: 48.861399 } });
+  const rev = await call(quote, { mode: 'colis', from: { lon: 2.297895, lat: 48.838126, label: '300 Rue de Vaugirard 75015 Paris' }, to: { lon: 2.339822, lat: 48.861399, label: '160 Rue de Rivoli 75001 Paris' } });
   assert.deepEqual(rev.json.geometry.coordinates[0], r.json.geometry.coordinates.at(-1));
-  const out = await call(quote, { mode: 'course', from: { lon: 3.06, lat: 50.63 }, to: { lon: 2.3, lat: 48.8 } });
+  const out = await call(quote, { mode: 'course', from: { lon: 3.06, lat: 50.63, label: 'Lille' }, to: { lon: 2.297895, lat: 48.838126, label: '300 Rue de Vaugirard 75015 Paris' } });
   assert.equal(out.status, 400);
 });
 
-test('C14 sur Vercel : mock ignoré, sans clé ORS -> 503 propre, jamais de faux prix', async () => {
+test('C14 sur Vercel : mock ignoré, sans serveur de l’appli ni clé ORS -> 503 propre, jamais de faux prix', async () => {
   process.env.VERCEL_ENV = 'production';
   process.env.ORS_API_KEY = '';
+  process.env.FD_SUPABASE_URL = '';
   try {
-    const r = await call(quote, { mode: 'course', from: { lon: 2.339822, lat: 48.861399 }, to: { lon: 2.297895, lat: 48.838126 } });
+    const r = await call(quote, { mode: 'course', from: { lon: 2.339822, lat: 48.861399, label: '160 Rue de Rivoli 75001 Paris' }, to: { lon: 2.297895, lat: 48.838126, label: '300 Rue de Vaugirard 75015 Paris' } });
     assert.equal(r.status, 503);
     assert.equal(r.json.ok, false);
     assert.equal(r.json.price, undefined);
@@ -358,7 +362,7 @@ test('mise à disposition : heure de début déjà passée aujourd’hui refusé
   assert.equal(ok.status, 200, JSON.stringify(ok.json));
 });
 
-test('ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization', async () => {
+test('lib/route (mode local) : ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization', async () => {
   const realFetch = global.fetch, seen = [];
   global.fetch = async (url, opts) => {
     seen.push({ url: String(url), auth: opts && opts.headers && opts.headers.Authorization });
@@ -367,8 +371,8 @@ test('ORS appelé sur api.heigit.org (sans mock), clé en en-tête Authorization
   process.env.VERCEL_ENV = 'preview';
   process.env.ORS_API_KEY = 'test-key';
   try {
-    const r = await call(quote, { mode: 'course', from: { lon: 2.301, lat: 48.801 }, to: { lon: 2.311, lat: 48.811 } });
-    assert.equal(r.status, 200);
+    const r = await route.getRoute({ lon: 2.301, lat: 48.801 }, { lon: 2.311, lat: 48.811 });
+    assert.equal(r.distanceKm, 1.5);
     assert.equal(seen[0].url, 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson');
     assert.equal(seen[0].auth, 'test-key');
   } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
@@ -387,21 +391,18 @@ test('ORS : radiuses [-1,-1] envoyé, une seule nouvelle tentative, puis erreur 
   process.env.VERCEL_ENV = 'preview';
   process.env.ORS_API_KEY = 'test-key';
   try {
-    let r = await call(quote, { mode: 'course', from: { lon: 2.401, lat: 48.901 }, to: { lon: 2.539607, lat: 48.997627 } });
-    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const r = await route.getRoute({ lon: 2.401, lat: 48.901 }, { lon: 2.539607, lat: 48.997627 });
+    assert.equal(r.distanceKm, 2.5);
     assert.equal(bodies.length, 2, 'une nouvelle tentative après l’échec');
     assert.deepEqual(bodies[0].radiuses, [-1, -1]);
     assert.deepEqual(bodies[1].radiuses, [-1, -1]);
     // deux échecs de suite : 503 propre, sans prix
     bodies.length = 0; fails = 2;
-    r = await call(quote, { mode: 'course', from: { lon: 2.402, lat: 48.902 }, to: { lon: 2.55186, lat: 49.014964 } });
-    assert.equal(r.status, 503);
-    assert.equal(r.json.price, undefined);
+    await assert.rejects(route.getRoute({ lon: 2.402, lat: 48.902 }, { lon: 2.55186, lat: 49.014964 }), e => e instanceof route.RouteError);
     assert.equal(bodies.length, 2);
     // « aucun itinéraire » (404) : pas de nouvelle tentative inutile, erreur propre
     bodies.length = 0; fails = 1; failStatus = 404;
-    r = await call(quote, { mode: 'course', from: { lon: 2.403, lat: 48.903 }, to: { lon: 2.56, lat: 49.01 } });
-    assert.equal(r.status, 503);
+    await assert.rejects(route.getRoute({ lon: 2.403, lat: 48.903 }, { lon: 2.56, lat: 49.01 }), e => e instanceof route.RouteError);
     assert.equal(bodies.length, 1);
   } finally { global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; }
 });
@@ -409,11 +410,12 @@ test('ORS : radiuses [-1,-1] envoyé, une seule nouvelle tentative, puis erreur 
 test('destination pré-réglée : coordonnées OSM utilisées, aucun géocodage', async () => {
   const Places = require(path.join(ROOT, 'assets/places.js'));
   const t2e = Places.PLACES.find(p => p.id === 'cdg-t2e');
-  const before = geoCalls;
+  const before = geoQ.length;
   clearMails();
   const r = await call(booking, { ...base(), to: t2e.label });
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  assert.equal(geoCalls - before, 1, 'seul le départ est géocodé');
+  // seul le départ est géocodé (en local, deux fois : la réservation, puis le devis simulé ; en ligne, le devis est celui de l'appli)
+  assert.deepEqual([...new Set(geoQ.slice(before))], [base().from], 'seul le départ est géocodé');
   assert.equal(r.json.to, t2e.label);
   assert.ok(mails()[0].text.includes('Aéroport CDG – Terminal 2E'));
 });
@@ -578,8 +580,9 @@ function fakeNet(resendReply) {
       const q = u.searchParams.get('q'), p = PLACES[q];
       return { ok: true, json: async () => ({ features: p ? [{ geometry: { coordinates: p.c }, properties: { label: q, postcode: p.postcode } }] : [] }) };
     }
-    if (u.hostname === 'api.heigit.org') {
-      return { ok: true, json: async () => ({ features: [{ geometry: { coordinates: [[2.3398, 48.8614], [2.2979, 48.8381]] }, properties: { summary: { distance: 5750, duration: 900 } } }] }) };
+    if (u.hostname === 'appli.example.supabase.co' && u.pathname === '/functions/v1/devis') {   // la fonction devis de l'appli
+      return reply(200, { mode: 'course', distanceKm: 5.8, durationMin: 15, geometry: { type: 'LineString', coordinates: [[2.3398, 48.8614], [2.2979, 48.8381]] },
+        trajetCentimes: 1740, totalCentimes: 1740, motos: 1, lignes: [{ key: 'km', label: '5,8 km × 3,00 €', amount: 17.4 }] });
     }
     if (u.hostname === 'api.resend.com') {
       sent.push({ key: opts.headers['Idempotency-Key'], body: JSON.parse(opts.body) });
@@ -591,9 +594,11 @@ function fakeNet(resendReply) {
 }
 const onVercel = async (fn) => {
   const realFetch = global.fetch;
-  process.env.VERCEL_ENV = 'preview'; process.env.ORS_API_KEY = 'k'; process.env.RESEND_API_KEY = 'k';
+  process.env.VERCEL_ENV = 'preview'; process.env.RESEND_API_KEY = 'k';
+  process.env.FD_SUPABASE_URL = 'https://appli.example.supabase.co'; process.env.FD_SUPABASE_ANON_KEY = 'anon';
   try { return await fn(); } finally {
-    global.fetch = realFetch; delete process.env.VERCEL_ENV; process.env.ORS_API_KEY = ''; delete process.env.RESEND_API_KEY;
+    global.fetch = realFetch; delete process.env.VERCEL_ENV; delete process.env.RESEND_API_KEY;
+    delete process.env.FD_SUPABASE_URL; delete process.env.FD_SUPABASE_ANON_KEY;
   }
 };
 const reply = (status, obj) => ({ ok: status < 300, status, json: async () => obj, text: async () => JSON.stringify(obj) });

@@ -79,3 +79,14 @@ test('todayParis / nowParisHm partagés navigateur + serveur', () => {
   assert.equal(P.todayParis(at), '2026-10-11');
   assert.equal(P.nowParisHm(at), '00:30');
 });
+
+test('le trajet de l’appli (distance et prix du km de sa grille) + bagages et nuit du site', () => {
+  const trajet = { cents: 3540, lignes: [{ key: 'km', label: '17,7 km × 2,00 €', amount: 35.4 }] };
+  const p = P.priceWithTrajet({ mode: 'course', km: 17.7, bagages: 1, night: true }, trajet);
+  assert.deepEqual(p.lines.map(l => [l.key, l.amount]), [['km', 35.4], ['bagage', 5], ['nuit', 10]]);
+  assert.equal(p.total, 50.4);
+  // une grille changée par le gérant : le trajet de l'appli fait foi, pas la grille embarquée du site
+  const p2 = P.priceWithTrajet({ mode: 'course', km: 17.7 }, { cents: 3894, lignes: [{ key: 'km', label: '17,7 km × 2,20 €', amount: 38.94 }] });
+  assert.equal(p2.total, 38.94);
+  assert.equal(P.priceWithTrajet({ mode: 'colis', km: 5 }, null).total, 13.5);   // sans trajet du serveur : la grille du site
+});

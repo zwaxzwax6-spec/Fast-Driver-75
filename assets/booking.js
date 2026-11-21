@@ -43,7 +43,8 @@
     el.bagWrap.hidden = mode !== 'course';
     el.bag.disabled = mode !== 'course';
     if (!isFleet) calc.setAttribute('aria-labelledby', 'tab-' + mode);
-    renderPrice();
+    // Course ↔ colis : le prix du km change, le trajet est redemandé au serveur (le même itinéraire reste en cache côté serveur de l'appli).
+    if (!isFleet && state.from && state.to) requestQuote(); else renderPrice();
     // Retour depuis l'onglet flotte : la carte a pu être masquée (ou jamais mesurée) entre-temps.
     if (from === 'flotte' && !isFleet && state.route && !el.map.classList.contains('stale')) showMap(state.route.geometry);
   }
@@ -120,22 +121,24 @@
 
   function requestQuote() {
     if (!state.from || !state.to) return;
-    var key = [state.from.lon, state.from.lat, state.to.lon, state.to.lat].join(',');
+    var mode = state.mode === 'colis' ? 'colis' : 'course';
+    var key = [mode, state.from.label, state.to.label].join('|');
     if (key === state.routeKey && state.route) { renderPrice(); return; }
     state.routeKey = key;
     var my = ++state.seq;
     el.quote.hidden = false;
     el.alert.hidden = true;
     el.wait.hidden = false;
+    // La distance et le prix du trajet viennent du serveur de l'appli (mêmes adresses, même fonction que l'appli).
     FD.post('/api/quote', {
-      mode: state.mode === 'colis' ? 'colis' : 'course',
-      from: { lon: state.from.lon, lat: state.from.lat },
-      to: { lon: state.to.lon, lat: state.to.lat }
+      mode: mode,
+      from: { lon: state.from.lon, lat: state.from.lat, label: state.from.label },
+      to: { lon: state.to.lon, lat: state.to.lat, label: state.to.label }
     }).then(function (r) {
       if (my !== state.seq) return;
       el.wait.hidden = true;
       if (r.status === 200 && r.json.ok) {
-        state.route = { km: r.json.distanceKm, min: r.json.durationMin, geometry: r.json.geometry };
+        state.route = { km: r.json.distanceKm, min: r.json.durationMin, geometry: r.json.geometry, trajet: r.json.trajet };
         renderPrice({ reveal: true });
         showMap(state.route.geometry);
       } else {
@@ -174,7 +177,7 @@
       return;
     }
     var pk = pickup();
-    var price = P.computePrice({ mode: state.mode, km: r.km, bagages: Number(el.bag.value || 0), night: pk.night });
+    var price = P.priceWithTrajet({ mode: state.mode, km: r.km, bagages: Number(el.bag.value || 0), night: pk.night }, r.trajet);
     el.lines.innerHTML = price.lines.map(function (l) {
       return '<div class="q-line"><span>' + FD.esc(l.label) + '</span><b>' + P.fmtEur(l.amount) + '</b></div>';
     }).join('');

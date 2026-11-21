@@ -5,7 +5,7 @@ var http = require('../lib/http');
 var V = require('../lib/validate');
 var antispam = require('../lib/antispam');
 var geo = require('../lib/geo');
-var route = require('../lib/route');
+var devis = require('../lib/devis');
 var T = require('../lib/templates');
 var notifyWithRef = require('../lib/notify').notifyWithRef;
 var W = require('../lib/whatsapp');
@@ -40,7 +40,8 @@ module.exports = http.postHandler(async function (body, req) {
     throw new http.HttpError(422, P.PICKUP_MESSAGES[pickup.error], { errors: { time: P.PICKUP_MESSAGES[pickup.error] } });
   }
 
-  // Adresses re-géocodées et itinéraire recalculé côté serveur : rien ne vient du navigateur.
+  // Adresses re-géocodées et itinéraire recalculé côté serveur : rien ne vient du navigateur. La distance et le prix du trajet
+  // sont ceux de l'appli (lib/devis.js, comme /api/quote).
   var from = d.from, to = d.to, price = null, routeInfo = null, verified = false;
   var places = await Promise.all([d.from, d.to].map(function (label) {
     return geo.geocodeIdf(label).catch(function (e) { return e; });
@@ -57,10 +58,10 @@ module.exports = http.postHandler(async function (body, req) {
     to = places[1].label;
     verified = true;
     try {
-      routeInfo = await route.getRoute(places[0], places[1]);
-      price = P.computePrice({ mode: d.mode, km: routeInfo.distanceKm, bagages: bagages, night: pickup.night });
+      routeInfo = await devis.itineraire(d.mode, d.from, d.to);
+      price = P.priceWithTrajet({ mode: d.mode, km: routeInfo.distanceKm, bagages: bagages, night: pickup.night }, routeInfo.trajet);
     } catch (e) {
-      if (!(e instanceof route.RouteError)) throw e;
+      if (!(e instanceof devis.DevisError)) throw e;
       console.error('[booking] itinéraire indisponible', e.code);
     }
   }

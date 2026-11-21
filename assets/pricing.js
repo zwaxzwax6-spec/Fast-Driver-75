@@ -51,6 +51,18 @@
     return { mode: mode, km: t / 10, bagages: bagages, night: !!opts.night, lines: lines, total: total / 100 };
   }
 
+  /* Le prix avec le trajet de l'appli (fonction `devis` de son serveur : sa distance et le prix du km de la grille en vigueur),
+     plus les bagages et la nuit du site. Sans trajet du serveur : la grille embarquée. */
+  function priceWithTrajet(opts, trajet) {
+    var p = computePrice(opts);
+    if (!trajet) return p;
+    var sup = p.lines.filter(function (l) { return l.key !== 'km'; });
+    var cents = sup.reduce(function (s, l) { return s + Math.round(l.amount * 100); }, trajet.cents);
+    p.lines = trajet.lignes.map(function (l) { return { key: l.key, label: l.label, amount: l.amount }; }).concat(sup);
+    p.total = cents / 100;
+    return p;
+  }
+
   var fmt = null;
   function parisParts(ms) {
     fmt = fmt || new Intl.DateTimeFormat('en-GB', {
@@ -122,6 +134,7 @@
     MAX_BAGAGES: MAX_BAGAGES,
     BAGAGE_EUR: BAGAGE_EUR,
     computePrice: computePrice,
+    priceWithTrajet: priceWithTrajet,
     roundKm: roundKm,
     fmtEur: fmtEur,
     fmtKm: fmtKm,
